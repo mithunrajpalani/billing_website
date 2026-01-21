@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="login-container" style="display: flex; justify-content: center; align-items: center; min-height: 70vh;">
+    <div class="card" style="width: 100%; max-width: 400px;">
+        <h2 style="text-align: center;">Owner Signup</h2>
+        <p style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 25px;">Create an
+            account to start managing your bills.</p>
+
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Desired Username</label>
+                <input type="text" id="username" name="username" required placeholder="Choose a username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="Create a password">
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required
+                    placeholder="Repeat password">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Create Account</button>
+        </form>
+
+        <div
+            style="margin-top: 25px; text-align: center; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <p style="font-size: 0.9rem;">Already have an account?</p>
+            <a href="{{ url_for('login') }}"
+                style="color: var(--accent-color); font-weight: 700; text-decoration: none;">Login here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

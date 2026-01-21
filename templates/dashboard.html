@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="billing-grid">
+    <!-- Item Selection Section -->
+    <div class="card">
+        <div style="margin-bottom: 25px;">
+            <label for="bill-location"
+                style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Location for this
+                Bill</label>
+            <input type="text" id="bill-location" value="" placeholder="e.g. Table 5, Room 101...">
+        </div>
+        <h2>Select Items</h2>
+        <div class="item-selection">
+            {% for item in items %}
+            <div class="item-card" onclick="selectItem('{{ item.id }}', '{{ item.name }}', {{ item.price }}, this)">
+                <span class="item-name">{{ item.name }}</span>
+                <span class="item-price">₹{{ item.price }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div id="flavor-selection-container" class="hidden" style="margin-top: 20px;">
+            <h3>Select Ice Cream Flavor</h3>
+            <div class="form-group">
+                <select id="flavor-select" onchange="addFlavor()">
+                    <option value="">-- Select Flavor --</option>
+                    {% for flavor in flavors %}
+                    <option value="{{ flavor.name }}" data-price="{{ flavor.price }}">{{ flavor.name }} (₹{{
+                        flavor.price }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="quantity-modal" class="hidden"
+            style="margin-top: 20px; padding: 15px; background: #eee; border-radius: 8px;">
+            <h3>Quantity for <span id="current-item-name"></span></h3>
+            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label>Quantity</label>
+                    <input type="number" id="item-quantity" value="1" min="1">
+                </div>
+                <button class="btn btn-primary" onclick="confirmAddItem()">Add to Bill</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bill Summary Section -->
+    <div class="card">
+        <div style="text-align: center;">
+            <p style="font-weight: 700; letter-spacing: 2px;">ESTIMATE</p>
+            <p style="font-weight: 700;">{{ settings.company_name }}</p>
+            <p>{{ settings.shop_name }}</p>
+            <p style="font-size: 0.8rem;">{{ settings.address }}</p>
+            <p style="font-size: 0.8rem;">Mobile: {{ settings.mobile }}{{ ', ' + settings.mobile2 if settings.mobile2
+                else '' }}</p>
+        </div>
+
+        <table id="bill-table">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="bill-body">
+                <!-- Items will be added here -->
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="3" class="text-right">Grand Total</td>
+                    <td id="grand-total">₹0.00</td>
+                    <td></td>
+                </tr>
+                <tr style="color: var(--danger-color);">
+                    <td colspan="3" class="text-right">Advance Paid</td>
+                    <td>
+                        <input type="number" id="bill-advance" placeholder="0" min="0" oninput="updateBillTable()"
+                            style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; font-family: inherit;">
+                    </td>
+                    <td></td>
+                </tr>
+                <tr style="color: #636e72;">
+                    <td colspan="3" class="text-right">Discount (-)</td>
+                    <td>
+                        <input type="number" id="bill-discount" placeholder="0" min="0" oninput="updateBillTable()"
+                            style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; font-family: inherit;">
+                    </td>
+                    <td></td>
+                </tr>
+                <tr class="total-row" style="color: var(--success-color);">
+                    <td colspan="3" class="text-right">Balance Due</td>
+                    <td id="balance-due">₹0.00</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div style="margin-top: 30px; display: flex; gap: 10px;">
+            <button class="btn btn-primary" style="flex: 1;" onclick="generateBill()">Generate Bill / Submit</button>
+            <button class="btn" style="background: #ccc;" onclick="clearBill()">Clear</button>
+        </div>
+
+        <div id="bill-success" class="hidden" style="margin-top: 20px;">
+            <div class="alert">Bill generated successfully!</div>
+            <a id="view-bill-link" href="#" target="_blank" class="btn btn-primary" style="width: 100%;">View Bill</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // These variables used by billing.js
+    const SHOP_SETTINGS = {
+        name: "{{ settings.shop_name }}",
+        address: "{{ settings.address }}",
+        mobile: "{{ settings.mobile }}"
+    };
+</script>
+{% endblock %}

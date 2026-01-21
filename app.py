@@ -1,0 +1,288 @@
+import os
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from models import db, User, ShopSettings, Item, Bill, BillItem
+from datetime import datetime
+import json
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///billing.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@app.context_processor
+def inject_settings():
+    return dict(settings=ShopSettings.query.first())
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Create database and seed initial data
+def seed_data():
+    with app.app_context():
+        db.create_all()
+        
+        # Create default user if not exists
+        if not User.query.filter_by(username='admin').first():
+            hashed_password = generate_password_hash('admin123', method='pbkdf2:sha256')
+            admin = User(username='admin', password=hashed_password)
+            db.session.add(admin)
+        
+        # Create default shop settings if not exists
+        if not ShopSettings.query.first():
+            settings = ShopSettings()
+            db.session.add(settings)
+            
+        # Create initial items if table is empty
+        if not Item.query.first():
+            initial_items = [
+                {'name': 'Ice Cream', 'price': 0, 'category': 'Main'},
+                {'name': 'Vanilla', 'price': 30, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Strawberry', 'price': 35, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Butterscotch', 'price': 40, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Pista', 'price': 40, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'American Nuts', 'price': 50, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Kulfi Nuts', 'price': 50, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Italian Delight', 'price': 55, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Kaju Katli', 'price': 60, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Gulkand', 'price': 45, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Cassata', 'price': 70, 'category': 'Ice Cream', 'is_flavor': True},
+                {'name': 'Fruits', 'price': 40, 'category': 'Main'},
+                {'name': 'Beeda', 'price': 15, 'category': 'Main'},
+                {'name': 'Welcome Drinks', 'price': 25, 'category': 'Main'},
+                {'name': 'Popcorn', 'price': 20, 'category': 'Main'},
+                {'name': 'Cotton Candy', 'price': 20, 'category': 'Main'},
+                {'name': 'Chocolate Fountain', 'price': 100, 'category': 'Main'},
+                {'name': 'Milk', 'price': 28, 'category': 'Main'},
+                {'name': 'Curd', 'price': 30, 'category': 'Main'},
+                {'name': 'Paneer', 'price': 100, 'category': 'Main'},
+                {'name': 'Starters', 'price': 0, 'category': 'Main'},
+                {'name': 'Boy', 'price': 0, 'category': 'Main'},
+                {'name': 'Auto', 'price': 0, 'category': 'Main'}
+            ]
+            for item_data in initial_items:
+                item = Item(**item_data)
+                db.session.add(item)
+        
+        db.session.commit()
+
+        # Ensure specific items exist
+        for item_name in ['Starters', 'Boy', 'Auto']:
+            if not Item.query.filter_by(name=item_name).first():
+                new_item = Item(name=item_name, price=0, category='Main')
+                db.session.add(new_item)
+        
+        db.session.commit()
+
+@app.route('/')
+@login_required
+def index():
+    items = Item.query.filter_by(is_flavor=False).all()
+    ice_cream_flavors = Item.query.filter_by(category='Ice Cream', is_flavor=True).all()
+    settings = ShopSettings.query.first()
+    return render_template('dashboard.html', items=items, flavors=ice_cream_flavors, settings=settings, date=datetime.now())
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid username or password')
+    return render_template('login.html')
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            flash('Passwords do not match')
+            return render_template('signup.html')
+
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists')
+            return render_template('signup.html')
+
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(username=username, password=hashed_password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash('Account created successfully! Please login.')
+        return redirect(url_for('login'))
+
+    return render_template('signup.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+@app.route('/generate_bill', methods=['POST'])
+@login_required
+def generate_bill():
+    data = request.json
+    bill_data = data.get('items')
+    grand_total = data.get('grand_total')
+    advance_amount = float(data.get('advance_amount', 0))
+    discount_amount = float(data.get('discount_amount', 0))
+    balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount))
+    custom_location = data.get('location')
+    
+    settings = ShopSettings.query.first()
+    bill_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
+    new_bill = Bill(
+        bill_number=bill_number,
+        company_name=settings.company_name,
+        shop_name=settings.shop_name,
+        location=custom_location if custom_location else '',
+        shop_address=settings.address,
+        shop_mobile=settings.mobile,
+        grand_total=grand_total,
+        advance_amount=advance_amount,
+        discount_amount=discount_amount,
+        balance_amount=balance_amount
+    )
+    db.session.add(new_bill)
+    db.session.flush() # Get the bill id
+    
+    for item in bill_data:
+        bill_item = BillItem(
+            bill_id=new_bill.id,
+            item_name=item['name'],
+            quantity=item['quantity'],
+            unit_price=item['price'],
+            total_price=item['total']
+        )
+        db.session.add(bill_item)
+    
+    # Save session to get IDs for PDF generation
+    db.session.commit()
+    
+    return jsonify({'status': 'success', 'bill_number': bill_number, 'view_url': url_for('view_bill', bill_number=bill_number)})
+
+@app.route('/view_bill/<bill_number>')
+@login_required
+def view_bill(bill_number):
+    bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
+    settings = ShopSettings.query.first()
+    return render_template('bill_view.html', bill=bill, settings=settings)
+
+@app.route('/history')
+@login_required
+def history():
+    bills = Bill.query.order_by(Bill.date.desc()).all()
+    return render_template('history.html', bills=bills)
+
+@app.route('/clear_history', methods=['POST'])
+@login_required
+def clear_history():
+    try:
+        # Delete all bill items first due to foreign key constraints if any (though cascade="all, delete-orphan" handles it)
+        db.session.query(BillItem).delete()
+        db.session.query(Bill).delete()
+        db.session.commit()
+        flash('Bill history cleared successfully')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error clearing history: {str(e)}')
+    return redirect(url_for('history'))
+
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    settings = ShopSettings.query.first()
+    items = Item.query.all()
+    if request.method == 'POST':
+        settings.company_name = request.form.get('company_name')
+        settings.shop_name = request.form.get('shop_name')
+        settings.address = request.form.get('address')
+        settings.mobile = request.form.get('mobile')
+        settings.mobile2 = request.form.get('mobile2')
+        
+        # Handle QR Code Upload
+        if 'qr_code' in request.files:
+            file = request.files['qr_code']
+            if file and file.filename != '' and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                # Add timestamp to filename to avoid cache issues
+                filename = f"{int(datetime.now().timestamp())}_{filename}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                settings.qr_code_path = filename
+        
+        # Add new item if provided
+        new_item_name = request.form.get('new_item_name')
+        new_item_price = request.form.get('new_item_price')
+        if new_item_name and new_item_price:
+            existing_item = Item.query.filter_by(name=new_item_name).first()
+            if not existing_item:
+                new_item = Item(name=new_item_name, price=float(new_item_price), category='Main')
+                db.session.add(new_item)
+            else:
+                flash(f'Item "{new_item_name}" already exists.')
+        
+        # Update prices
+        for item in items:
+            new_price = request.form.get(f'price_{item.id}')
+            if new_price:
+                item.price = float(new_price)
+        
+        # Account Management
+        new_username = request.form.get('new_username')
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        
+        if (new_username and new_username != current_user.username) or new_password:
+            if not current_password or not check_password_hash(current_user.password, current_password):
+                flash('Current password is required and must be correct to change credentials.')
+                return redirect(url_for('settings'))
+            
+            if new_username:
+                existing_user = User.query.filter(User.username == new_username, User.id != current_user.id).first()
+                if existing_user:
+                    flash(f'Username "{new_username}" is already taken.')
+                else:
+                    current_user.username = new_username
+            
+            if new_password:
+                current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+            
+            flash('Login credentials updated successfully.')
+        
+        try:
+            db.session.commit()
+            flash('Settings updated successfully')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating settings: {str(e)}')
+        return redirect(url_for('settings'))
+    
+    return render_template('settings.html', settings=settings, items=items)
+
+if __name__ == '__main__':
+    seed_data()
+    app.run(debug=True, host='0.0.0.0', port=5000)

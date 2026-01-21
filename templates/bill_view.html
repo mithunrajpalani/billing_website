@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bill - {{ bill.bill_number }}</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #f9f9f9;
+        }
+
+        .bill-container {
+            background-color: #fff;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-transform: uppercase;
+        }
+
+        .header p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .bill-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .total-section {
+            text-align: right;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .no-print {
+            text-align: center;
+        }
+
+        @media print {
+            body {
+                background-color: #fff;
+                padding: 0;
+            }
+
+            .bill-container {
+                box-shadow: none;
+                width: 100%;
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .bill-container {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .header h2 {
+                font-size: 18px;
+            }
+
+            .bill-info {
+                flex-direction: column;
+                align-items: center;
+                gap: 5px;
+                text-align: center;
+            }
+
+            th,
+            td {
+                padding: 8px 5px;
+                font-size: 13px;
+                text-align: center !important;
+            }
+
+            .total-section {
+                text-align: center;
+            }
+        }
+
+        .btn-print {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .btn-print:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="no-print"
+        style="text-align: center; display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
+        <button class="btn-print" onclick="window.print()">Print Bill</button>
+        <button class="btn-print" style="background-color: #34b7f1;" onclick="downloadBill()">Download Bill</button>
+    </div>
+
+    <div class="bill-container">
+        <div class="header">
+            <h1 style="font-size: 28px; margin-bottom: 5px;">{{ bill.company_name if bill.company_name else
+                settings.company_name }}</h1>
+            <h2 style="margin-top: 0; font-size: 20px;">{{ bill.shop_name }}</h2>
+            <p>{{ settings.address }}</p>
+            <p>Mobile: {{ settings.mobile }}{{ ', ' + settings.mobile2 if settings.mobile2 else '' }}</p>
+            <p
+                style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px; margin-bottom: 5px; font-weight: bold; font-size: 14px;">
+                ESTIMATE</p>
+            <h2 style="font-weight: bold; margin-top: 0; margin-bottom: 15px; font-size: 22px;">{{ bill.location if
+                bill.location else '' }}</h2>
+        </div>
+
+        <div class="bill-info">
+            <div>
+                <strong>Bill Number:</strong> {{ bill.bill_number }}
+            </div>
+            <div>
+                <strong>Date:</strong> {{ bill.date.strftime('%d-%m-%Y %H:%M') }}
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Qty</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in bill.items %}
+                <tr>
+                    <td>{{ item.item_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>₹{{ "{:.2f}".format(item.unit_price) }}</td>
+                    <td>₹{{ "{:.2f}".format(item.total_price) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="total-section">
+            <p>Total Amount: ₹{{ "{:.2f}".format(bill.grand_total) }}</p>
+            <p style="color: #c62828; font-size: 16px;">Advance Paid: ₹{{ "{:.2f}".format(bill.advance_amount) }}</p>
+            {% if bill.discount_amount and bill.discount_amount > 0 %}
+            <p style="color: #636e72; font-size: 16px;">Discount: ₹{{ "{:.2f}".format(bill.discount_amount) }}</p>
+            {% endif %}
+            <p
+                style="border-top: 2px solid #333; display: inline-block; padding-top: 5px; margin-top: 5px; font-size: 22px;">
+                Balance Due: ₹{{ "{:.2f}".format(bill.balance_amount) }}</p>
+        </div>
+
+        {% if settings.qr_code_path %}
+        <div
+            style="text-align: center; margin-top: 25px; padding: 15px; border: 1px dashed #ddd; border-radius: 10px; display: inline-block; width: auto; margin-left: auto; margin-right: auto; display: block;">
+            <p style="margin-bottom: 10px; font-size: 14px; font-weight: bold; color: var(--text-color);">Scan to Pay
+            </p>
+            <img src="{{ url_for('static', filename='uploads/' + settings.qr_code_path) }}" alt="Payment QR Code"
+                style="max-height: 180px; width: auto;">
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>Thank you for your business!</p>
+            <p>This is a computer-generated soft copy of the bill.</p>
+        </div>
+    </div>
+
+    <!-- html2canvas for image sharing -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script>
+        async function downloadBill() {
+            const billContainer = document.querySelector('.bill-container');
+            const canvas = await html2canvas(billContainer, {
+                scale: 2, // Higher quality
+                backgroundColor: "#ffffff",
+                logging: false,
+                useCORS: true
+            });
+
+            const link = document.createElement('a');
+            link.download = `bill-{{ bill.bill_number }}.png`;
+            link.href = canvas.toDataURL("image/png");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Still offer share on mobile if supported
+            if (navigator.share) {
+                canvas.toBlob(async (blob) => {
+                    const file = new File([blob], `bill-{{ bill.bill_number }}.png`, { type: 'image/png' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({
+                                files: [file],
+                                title: 'Bill {{ bill.bill_number }}',
+                                text: 'Payment Receipt'
+                            });
+                        } catch (err) {
+                            console.log('Share dismissed or failed');
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+
+</html>
