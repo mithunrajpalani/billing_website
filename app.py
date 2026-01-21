@@ -7,11 +7,24 @@ from models import db, User, ShopSettings, Item, Bill, BillItem
 from datetime import datetime
 import json
 
-app = Flask(__name__)
+# Determine if we are running on Vercel or similar read-only environment
+IS_VERCEL = "VERCEL" in os.environ
+
+if IS_VERCEL:
+    # On Vercel, the only writable directory is /tmp
+    app = Flask(__name__, instance_path='/tmp')
+    db_uri = 'sqlite:////tmp/billing.db'
+    upload_folder = '/tmp/uploads'
+    os.makedirs(upload_folder, exist_ok=True)
+else:
+    app = Flask(__name__)
+    db_uri = 'sqlite:///billing.db'
+    upload_folder = os.path.join('static', 'uploads')
+
 app.config['SECRET_KEY'] = 'your-secret-key-here'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///billing.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 
 def allowed_file(filename):
@@ -22,6 +35,10 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.context_processor
 def inject_settings():
@@ -283,6 +300,8 @@ def settings():
     
     return render_template('settings.html', settings=settings, items=items)
 
-if __name__ == '__main__':
+with app.app_context():
     seed_data()
+
+if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

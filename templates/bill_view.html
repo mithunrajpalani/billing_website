@@ -215,7 +215,7 @@
             style="text-align: center; margin-top: 25px; padding: 15px; border: 1px dashed #ddd; border-radius: 10px; display: inline-block; width: auto; margin-left: auto; margin-right: auto; display: block;">
             <p style="margin-bottom: 10px; font-size: 14px; font-weight: bold; color: var(--text-color);">Scan to Pay
             </p>
-            <img src="{{ url_for('static', filename='uploads/' + settings.qr_code_path) }}" alt="Payment QR Code"
+            <img src="{{ url_for('serve_upload', filename=settings.qr_code_path) }}" alt="Payment QR Code"
                 style="max-height: 180px; width: auto;">
         </div>
         {% endif %}

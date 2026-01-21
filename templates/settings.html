@@ -16,7 +16,7 @@
                 {% if settings.qr_code_path %}
                 <div style="text-align: center;">
                     <p style="font-size: 0.75rem; margin-bottom: 5px; font-weight: 600;">Current QR:</p>
-                    <img src="{{ url_for('static', filename='uploads/' + settings.qr_code_path) }}" alt="QR Code"
+                    <img src="{{ url_for('serve_upload', filename=settings.qr_code_path) }}" alt="QR Code"
                         style="height: 60px; border-radius: 5px; border: 1px solid #ddd;">
                 </div>
                 {% endif %}
