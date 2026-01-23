@@ -4,11 +4,17 @@
 <div class="billing-grid">
     <!-- Item Selection Section -->
     <div class="card">
-        <div style="margin-bottom: 25px;">
-            <label for="bill-location"
-                style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Location for this
-                Bill</label>
-            <input type="text" id="bill-location" value="" placeholder="e.g. Table 5, Room 101...">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+            <div>
+                <label for="bill-date"
+                    style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Bill Date</label>
+                <input type="date" id="bill-date" value="{{ date.strftime('%Y-%m-%d') }}">
+            </div>
+            <div>
+                <label for="bill-location"
+                    style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Location</label>
+                <input type="text" id="bill-location" value="" placeholder="e.g. Table 5">
+            </div>
         </div>
         <h2>Select Items</h2>
         <div class="item-selection">
@@ -20,14 +26,40 @@
             {% endfor %}
         </div>
 
-        <div id="flavor-selection-container" class="hidden" style="margin-top: 20px;">
-            <h3>Select Ice Cream Flavor</h3>
+        <div id="flavor-selection-container" class="hidden sub-item-container" style="margin-top: 20px;">
+            <h3>Select Flavor</h3>
             <div class="form-group">
-                <select id="flavor-select" onchange="addFlavor()">
+                <select id="flavor-select" onchange="addSubItem('flavor-select', 'Ice Cream')">
                     <option value="">-- Select Flavor --</option>
                     {% for flavor in flavors %}
                     <option value="{{ flavor.name }}" data-price="{{ flavor.price }}">{{ flavor.name }} (₹{{
                         flavor.price }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="fruit-selection-container" class="hidden sub-item-container" style="margin-top: 20px;">
+            <h3>Select Fruit Type</h3>
+            <div class="form-group">
+                <select id="fruit-select" onchange="addSubItem('fruit-select', 'Fruits')">
+                    <option value="">-- Select Fruit --</option>
+                    {% for item in fruit_items %}
+                    <option value="{{ item.name }}" data-price="{{ item.price }}">{{ item.name }} (₹{{ item.price }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="drink-selection-container" class="hidden sub-item-container" style="margin-top: 20px;">
+            <h3>Select Drink Flavor</h3>
+            <div class="form-group">
+                <select id="drink-select" onchange="addSubItem('drink-select', 'Welcome Drinks')">
+                    <option value="">-- Select Drink --</option>
+                    {% for item in drink_items %}
+                    <option value="{{ item.name }}" data-price="{{ item.price }}">{{ item.name }} (₹{{ item.price }})
+                    </option>
                     {% endfor %}
                 </select>
             </div>

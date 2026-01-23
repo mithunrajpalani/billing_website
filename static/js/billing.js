@@ -2,22 +2,39 @@ let billItems = [];
 let currentSelectedItem = null;
 
 function selectItem(id, name, price, element) {
+    const containers = document.querySelectorAll('.sub-item-container');
+    containers.forEach(c => c.classList.add('hidden'));
+
     if (name === 'Ice Cream') {
         const container = document.getElementById('flavor-selection-container');
         container.classList.remove('hidden');
-        // Move container after the clicked element's row or just after it in grid
         element.parentNode.insertBefore(container, element.nextSibling);
         document.getElementById('quantity-modal').classList.add('hidden');
         return;
     }
 
-    document.getElementById('flavor-selection-container').classList.add('hidden');
+    if (name === 'Fruits') {
+        const container = document.getElementById('fruit-selection-container');
+        container.classList.remove('hidden');
+        element.parentNode.insertBefore(container, element.nextSibling);
+        document.getElementById('quantity-modal').classList.add('hidden');
+        return;
+    }
+
+    if (name === 'Welcome Drinks') {
+        const container = document.getElementById('drink-selection-container');
+        container.classList.remove('hidden');
+        element.parentNode.insertBefore(container, element.nextSibling);
+        document.getElementById('quantity-modal').classList.add('hidden');
+        return;
+    }
+
     currentSelectedItem = { id, name, price };
     showQuantityModal(name);
 }
 
-function addFlavor() {
-    const select = document.getElementById('flavor-select');
+function addSubItem(selectId, parentName) {
+    const select = document.getElementById(selectId);
     const selectedOption = select.options[select.selectedIndex];
 
     if (!selectedOption.value) return;
@@ -25,7 +42,11 @@ function addFlavor() {
     const name = selectedOption.value;
     const price = parseFloat(selectedOption.getAttribute('data-price'));
 
-    currentSelectedItem = { id: 'flavor-' + name, name: 'Ice Cream (' + name + ')', price: price };
+    currentSelectedItem = {
+        id: selectId + '-' + name,
+        name: parentName + ' (' + name + ')',
+        price: price
+    };
     showQuantityModal(currentSelectedItem.name);
 
     // Reset select
@@ -118,6 +139,7 @@ async function generateBill() {
     const discount = parseFloat(document.getElementById('bill-discount').value) || 0;
     const balance = grandTotal - advance - discount;
     const location = document.getElementById('bill-location').value;
+    const date = document.getElementById('bill-date').value;
 
     const response = await fetch('/generate_bill', {
         method: 'POST',
@@ -130,7 +152,8 @@ async function generateBill() {
             advance_amount: advance,
             discount_amount: parseFloat(document.getElementById('bill-discount').value) || 0,
             balance_amount: balance,
-            location: location
+            location: location,
+            date: date
         }),
     });
 

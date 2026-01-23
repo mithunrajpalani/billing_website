@@ -47,29 +47,55 @@
 
         <h3 style="margin: 30px 0 15px;">Add New Item</h3>
         <div
-            style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 20px; align-items: flex-end; background: rgba(78, 204, 163, 0.05); padding: 25px; border-radius: 15px; margin-bottom: 35px; border: 1px solid rgba(78, 204, 163, 0.1);">
-            <div class="form-group" style="margin-bottom: 0;">
-                <label for="new_item_name">Item Name</label>
-                <input type="text" id="new_item_name" name="new_item_name" placeholder="e.g. Special Dessert">
+            style="background: rgba(78, 204, 163, 0.05); padding: 25px; border-radius: 15px; margin-bottom: 35px; border: 1px solid rgba(78, 204, 163, 0.1);">
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="new_item_name">Item Name</label>
+                    <input type="text" id="new_item_name" name="new_item_name" placeholder="e.g. Mixing Fruits">
+                </div>
+                <div class="form-group">
+                    <label for="new_item_price">Price (₹)</label>
+                    <input type="number" id="new_item_price" name="new_item_price" step="0.01" value="0">
+                </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
-                <label for="new_item_price">Price (₹)</label>
-                <input type="number" id="new_item_price" name="new_item_price" step="0.01" value="0">
+
+            <div
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: flex-end; margin-top: 15px;">
+                <div class="form-group">
+                    <label for="new_item_category">Category</label>
+                    <select id="new_item_category" name="new_item_category">
+                        <option value="Main">Main</option>
+                        <option value="Ice Cream">Ice Cream</option>
+                        <option value="Fruits">Fruits</option>
+                        <option value="Welcome Drinks">Welcome Drinks</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                    <input type="checkbox" id="is_sub_item" name="is_sub_item" style="width: auto;">
+                    <label for="is_sub_item" style="margin-bottom: 0;">Is Sub-item (e.g. flavor/fruit type)</label>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary" style="padding: 14px 25px;">Add Item</button>
+            <button type="submit" class="btn btn-primary" style="margin-top: 15px; width: 100%;">Add Item</button>
         </div>
         <p style="margin: -25px 0 35px; font-size: 0.85rem; color: var(--text-muted); padding-left: 5px;">* New items
             are added to the "Main" category. Click 'Add Item' to save.</p>
 
         <h3 style="margin: 30px 0 15px;">Item Prices</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+        {% set categories = ['Main', 'Ice Cream', 'Fruits', 'Welcome Drinks'] %}
+        {% for cat in categories %}
+        <h4 style="margin: 20px 0 10px; color: var(--accent-color);">{{ cat }} Items</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
             {% for item in items %}
+            {% if item.category == cat %}
             <div class="form-group">
-                <label>{{ item.name }}{{ ' (Flavor)' if item.is_flavor else '' }}</label>
+                <label>{{ item.name }}{{ ' (Sub-item)' if item.is_flavor else '' }}</label>
                 <input type="number" name="price_{{ item.id }}" value="{{ item.price }}" step="0.01">
             </div>
+            {% endif %}
             {% endfor %}
         </div>
+        {% endfor %}
 
         <h3 style="margin: 40px 0 15px; padding-top: 30px; border-top: 1px solid var(--border-color);">Account
             Management</h3>

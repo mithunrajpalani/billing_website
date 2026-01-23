@@ -80,10 +80,16 @@ def seed_data():
                 {'name': 'Cassata', 'price': 70, 'category': 'Ice Cream', 'is_flavor': True},
                 {'name': 'Fruits', 'price': 40, 'category': 'Main'},
                 {'name': 'Beeda', 'price': 15, 'category': 'Main'},
-                {'name': 'Welcome Drinks', 'price': 25, 'category': 'Main'},
+                {'name': 'Welcome Drinks', 'price': 0, 'category': 'Main'},
+                {'name': 'Fruit Salad', 'price': 30, 'category': 'Welcome Drinks', 'is_flavor': True},
+                {'name': 'Rose Milk', 'price': 30, 'category': 'Welcome Drinks', 'is_flavor': True},
+                {'name': 'Watermelon Juice', 'price': 30, 'category': 'Welcome Drinks', 'is_flavor': True},
                 {'name': 'Popcorn', 'price': 20, 'category': 'Main'},
                 {'name': 'Cotton Candy', 'price': 20, 'category': 'Main'},
                 {'name': 'Chocolate Fountain', 'price': 100, 'category': 'Main'},
+                {'name': 'Fruits', 'price': 0, 'category': 'Main'},
+                {'name': 'Mixing Fruits', 'price': 40, 'category': 'Fruits', 'is_flavor': True},
+                {'name': 'Separate Fruits', 'price': 50, 'category': 'Fruits', 'is_flavor': True},
                 {'name': 'Milk', 'price': 28, 'category': 'Main'},
                 {'name': 'Curd', 'price': 30, 'category': 'Main'},
                 {'name': 'Paneer', 'price': 100, 'category': 'Main'},
@@ -110,8 +116,16 @@ def seed_data():
 def index():
     items = Item.query.filter_by(is_flavor=False).all()
     ice_cream_flavors = Item.query.filter_by(category='Ice Cream', is_flavor=True).all()
+    fruit_items = Item.query.filter_by(category='Fruits', is_flavor=True).all()
+    drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
     settings = ShopSettings.query.first()
-    return render_template('dashboard.html', items=items, flavors=ice_cream_flavors, settings=settings, date=datetime.now())
+    return render_template('dashboard.html', 
+                          items=items, 
+                          flavors=ice_cream_flavors, 
+                          fruit_items=fruit_items,
+                          drink_items=drink_items,
+                          settings=settings, 
+                          date=datetime.now())
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -168,12 +182,25 @@ def generate_bill():
     discount_amount = float(data.get('discount_amount', 0))
     balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount))
     custom_location = data.get('location')
+    bill_date_str = data.get('date')
     
+    bill_date = datetime.now()
+    if bill_date_str:
+        try:
+            # Handle standard date format from <input type="date">
+            bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
+            # Add current time to the selected date
+            now = datetime.now()
+            bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+        except ValueError:
+            pass
+
     settings = ShopSettings.query.first()
     bill_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
     new_bill = Bill(
         bill_number=bill_number,
+        date=bill_date,
         company_name=settings.company_name,
         shop_name=settings.shop_name,
         location=custom_location if custom_location else '',
@@ -254,10 +281,18 @@ def settings():
         # Add new item if provided
         new_item_name = request.form.get('new_item_name')
         new_item_price = request.form.get('new_item_price')
+        new_item_category = request.form.get('new_item_category', 'Main')
+        is_sub_item = request.form.get('is_sub_item') == 'on'
+
         if new_item_name and new_item_price:
             existing_item = Item.query.filter_by(name=new_item_name).first()
             if not existing_item:
-                new_item = Item(name=new_item_name, price=float(new_item_price), category='Main')
+                new_item = Item(
+                    name=new_item_name, 
+                    price=float(new_item_price), 
+                    category=new_item_category,
+                    is_flavor=is_sub_item
+                )
                 db.session.add(new_item)
             else:
                 flash(f'Item "{new_item_name}" already exists.')
