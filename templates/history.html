@@ -26,12 +26,18 @@
             {% for bill in bills %}
             <tr>
                 <td>{{ bill.bill_number }}</td>
-                <td>{{ bill.date.strftime('%d-%m-%Y %H:%M') }}</td>
+                <td>{{ bill.date.strftime('%d/%m/%Y %H:%M') }}</td>
                 <td>₹{{ "{:.2f}".format(bill.grand_total) }}</td>
                 <td style="text-align: right;">
-                    <a href="{{ url_for('view_bill', bill_number=bill.bill_number) }}" target="_blank" class="btn"
-                        style="background: rgba(78, 204, 163, 0.1); color: var(--accent-color); padding: 8px 15px; font-size: 0.85rem; border: 1px solid rgba(78, 204, 163, 0.2);">View
-                        Bill</a>
+                    <div style="display: flex; justify-content: flex-end; gap: 5px;">
+                        <a href="{{ url_for('view_bill', bill_number=bill.bill_number) }}" target="_blank" class="btn"
+                            style="background: rgba(78, 204, 163, 0.1); color: var(--accent-color); padding: 8px 15px; font-size: 0.85rem; border: 1px solid rgba(78, 204, 163, 0.2);">View</a>
+                        <form action="{{ url_for('delete_bill', bill_id=bill.id) }}" method="POST"
+                            style="display: inline;" onsubmit="return confirm('Delete this bill?');">
+                            <button type="submit" class="btn"
+                                style="background: #ffebee; color: #c62828; padding: 8px 15px; font-size: 0.85rem; border: 1px solid #ffcdd2;">X</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% else %}

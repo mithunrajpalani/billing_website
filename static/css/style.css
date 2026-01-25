@@ -428,21 +428,27 @@ td {
 
     .item-selection {
         grid-template-columns: repeat(2, 1fr);
-        gap: 15px;
-        /* Increased from 12px */
+        gap: 10px;
     }
 
     .item-card {
-        padding: 12px;
-        min-height: 80px;
+        padding: 10px;
+        min-height: 70px;
     }
 
     .item-name {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
+        margin-bottom: 4px;
     }
 
     .item-price {
-        font-size: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .billing-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
     }
 
     nav a {

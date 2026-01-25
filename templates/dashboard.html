@@ -8,7 +8,7 @@
             <div>
                 <label for="bill-date"
                     style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Bill Date</label>
-                <input type="date" id="bill-date" value="{{ date.strftime('%Y-%m-%d') }}">
+                <input type="text" id="bill-date" value="{{ date.strftime('%d/%m/%Y') }}" placeholder="dd/mm/yyyy">
             </div>
             <div>
                 <label for="bill-location"
@@ -58,6 +58,19 @@
                 <select id="drink-select" onchange="addSubItem('drink-select', 'Welcome Drinks')">
                     <option value="">-- Select Drink --</option>
                     {% for item in drink_items %}
+                    <option value="{{ item.name }}" data-price="{{ item.price }}">{{ item.name }} (₹{{ item.price }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div id="beeda-selection-container" class="hidden sub-item-container" style="margin-top: 20px;">
+            <h3>Select Beeda Type</h3>
+            <div class="form-group">
+                <select id="beeda-select" onchange="addSubItem('beeda-select', 'Beeda')">
+                    <option value="">-- Select Beeda --</option>
+                    {% for item in beeda_items %}
                     <option value="{{ item.name }}" data-price="{{ item.price }}">{{ item.name }} (₹{{ item.price }})
                     </option>
                     {% endfor %}
@@ -125,7 +138,7 @@
                     <td></td>
                 </tr>
                 <tr class="total-row" style="color: var(--success-color);">
-                    <td colspan="3" class="text-right">Balance Due</td>
+                    <td colspan="3" class="text-right">Balance</td>
                     <td id="balance-due">₹0.00</td>
                     <td></td>
                 </tr>

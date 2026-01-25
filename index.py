@@ -81,7 +81,9 @@ def seed_data():
                 {'name': 'Fruits', 'price': 0, 'category': 'Main'},
                 {'name': 'Mixing Fruits', 'price': 40, 'category': 'Fruits', 'is_flavor': True},
                 {'name': 'Separate Fruits', 'price': 50, 'category': 'Fruits', 'is_flavor': True},
-                {'name': 'Beeda', 'price': 15, 'category': 'Main'},
+                {'name': 'Beeda', 'price': 0, 'category': 'Main'},
+                {'name': 'Sweet Beeda', 'price': 15, 'category': 'Beeda', 'is_flavor': True},
+                {'name': 'Sada Beeda', 'price': 15, 'category': 'Beeda', 'is_flavor': True},
                 {'name': 'Welcome Drinks', 'price': 0, 'category': 'Main'},
                 {'name': 'Fruit Salad', 'price': 30, 'category': 'Welcome Drinks', 'is_flavor': True},
                 {'name': 'Rose Milk', 'price': 30, 'category': 'Welcome Drinks', 'is_flavor': True},
@@ -117,12 +119,14 @@ def index():
     ice_cream_flavors = Item.query.filter_by(category='Ice Cream', is_flavor=True).all()
     fruit_items = Item.query.filter_by(category='Fruits', is_flavor=True).all()
     drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
-    settings = ShopSettings.query.first()
+    beeda_items = Item.query.filter_by(category='Beeda', is_flavor=True).all()
+    settings = ShopSettings.query.first() or ShopSettings()
     return render_template('dashboard.html', 
                           items=items, 
                           flavors=ice_cream_flavors, 
                           fruit_items=fruit_items,
                           drink_items=drink_items,
+                          beeda_items=beeda_items,
                           settings=settings, 
                           date=datetime.now())
 
@@ -175,26 +179,32 @@ def logout():
 @login_required
 def generate_bill():
     data = request.json
-    bill_data = data.get('items')
-    grand_total = data.get('grand_total')
-    advance_amount = float(data.get('advance_amount', 0))
-    discount_amount = float(data.get('discount_amount', 0))
-    balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount))
+    bill_data = data.get('items', [])
+    grand_total = float(data.get('grand_total', 0) or 0)
+    advance_amount = float(data.get('advance_amount', 0) or 0)
+    discount_amount = float(data.get('discount_amount', 0) or 0)
+    balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount) or 0)
     custom_location = data.get('location')
     bill_date_str = data.get('date')
     
     bill_date = datetime.now()
     if bill_date_str:
         try:
-            # Handle standard date format from <input type="date">
-            bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
+            # Handle dd/mm/yyyy format
+            bill_date = datetime.strptime(bill_date_str, '%d/%m/%Y')
             # Add current time to the selected date
             now = datetime.now()
             bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
         except ValueError:
-            pass
+            try:
+                # Fallback to standard ISO format
+                bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
+                now = datetime.now()
+                bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+            except ValueError:
+                pass
 
-    settings = ShopSettings.query.first()
+    settings = ShopSettings.query.first() or ShopSettings()
     bill_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
     new_bill = Bill(
@@ -232,7 +242,7 @@ def generate_bill():
 @login_required
 def view_bill(bill_number):
     bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
-    settings = ShopSettings.query.first()
+    settings = ShopSettings.query.first() or ShopSettings()
     return render_template('bill_view.html', bill=bill, settings=settings)
 
 @app.route('/history')
@@ -254,6 +264,32 @@ def clear_history():
         db.session.rollback()
         flash(f'Error clearing history: {str(e)}')
     return redirect(url_for('history'))
+
+@app.route('/delete_bill/<int:bill_id>', methods=['POST'])
+@login_required
+def delete_bill(bill_id):
+    bill = Bill.query.get_or_404(bill_id)
+    try:
+        db.session.delete(bill)
+        db.session.commit()
+        flash('Bill deleted successfully')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting bill: {str(e)}')
+    return redirect(url_for('history'))
+
+@app.route('/delete_item/<int:item_id>', methods=['POST'])
+@login_required
+def delete_item(item_id):
+    item = Item.query.get_or_404(item_id)
+    try:
+        db.session.delete(item)
+        db.session.commit()
+        flash(f'Item "{item.name}" deleted successfully')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting item: {str(e)}')
+    return redirect(url_for('settings'))
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
@@ -334,8 +370,11 @@ def settings():
     
     return render_template('settings.html', settings=settings, items=items)
 
-with app.app_context():
-    seed_data()
+try:
+    with app.app_context():
+        seed_data()
+except Exception as e:
+    print(f"Error seeding data: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -174,7 +174,7 @@
                 <strong>Bill Number:</strong> {{ bill.bill_number }}
             </div>
             <div>
-                <strong>Date:</strong> {{ bill.date.strftime('%d-%m-%Y %H:%M') }}
+                <strong>Date:</strong> {{ bill.date.strftime('%d/%m/%Y %H:%M') }}
             </div>
         </div>
 
@@ -201,13 +201,17 @@
 
         <div class="total-section">
             <p>Total Amount: ₹{{ "{:.2f}".format(bill.grand_total) }}</p>
+            {% if bill.advance_amount > 0 %}
             <p style="color: #c62828; font-size: 16px;">Advance Paid: ₹{{ "{:.2f}".format(bill.advance_amount) }}</p>
-            {% if bill.discount_amount and bill.discount_amount > 0 %}
+            {% endif %}
+            {% if bill.discount_amount > 0 %}
             <p style="color: #636e72; font-size: 16px;">Discount: ₹{{ "{:.2f}".format(bill.discount_amount) }}</p>
             {% endif %}
+            {% if bill.advance_amount > 0 or bill.discount_amount > 0 %}
             <p
                 style="border-top: 2px solid #333; display: inline-block; padding-top: 5px; margin-top: 5px; font-size: 22px;">
-                Balance Due: ₹{{ "{:.2f}".format(bill.balance_amount) }}</p>
+                Balance: ₹{{ "{:.2f}".format(bill.balance_amount) }}</p>
+            {% endif %}
         </div>
 
         {% if settings.qr_code_path %}

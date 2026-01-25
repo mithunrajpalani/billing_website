@@ -29,6 +29,14 @@ function selectItem(id, name, price, element) {
         return;
     }
 
+    if (name === 'Beeda') {
+        const container = document.getElementById('beeda-selection-container');
+        container.classList.remove('hidden');
+        element.parentNode.insertBefore(container, element.nextSibling);
+        document.getElementById('quantity-modal').classList.add('hidden');
+        return;
+    }
+
     currentSelectedItem = { id, name, price };
     showQuantityModal(name);
 }
