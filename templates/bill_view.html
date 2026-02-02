@@ -153,6 +153,8 @@
         style="text-align: center; display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
         <button class="btn-print" onclick="window.print()">Print Bill</button>
         <button class="btn-print" style="background-color: #34b7f1;" onclick="downloadBill()">Download Bill</button>
+        <button class="btn-print" style="background-color: #25D366;" onclick="shareOnWhatsApp()">Share on
+            WhatsApp</button>
     </div>
 
     <div class="bill-container">
@@ -183,7 +185,6 @@
                 <tr>
                     <th>Item Name</th>
                     <th>Qty</th>
-                    <th>Unit Price</th>
                     <th>Total</th>
                 </tr>
             </thead>
@@ -192,7 +193,6 @@
                 <tr>
                     <td>{{ item.item_name }}</td>
                     <td>{{ item.quantity }}</td>
-                    <td>₹{{ "{:.2f}".format(item.unit_price) }}</td>
                     <td>₹{{ "{:.2f}".format(item.total_price) }}</td>
                 </tr>
                 {% endfor %}
@@ -233,6 +233,11 @@
     <!-- html2canvas for image sharing -->
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script>
+        function shareOnWhatsApp() {
+            const text = "Bill Number: {{ bill.bill_number }}%0ADate: {{ bill.date.strftime('%d/%m/%Y') }}%0ATotal Amount: ₹{{ '{:.2f}'.format(bill.grand_total) }}%0ABalance: ₹{{ '{:.2f}'.format(bill.balance_amount) }}";
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+        }
+
         async function downloadBill() {
             const billContainer = document.querySelector('.bill-container');
             const canvas = await html2canvas(billContainer, {

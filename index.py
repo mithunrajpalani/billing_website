@@ -4,7 +4,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from models import db, User, ShopSettings, Item, Bill, BillItem
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 # Determine if we are running on Vercel or similar read-only environment
@@ -26,6 +26,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -138,6 +139,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
+            session.permanent = True
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password')
