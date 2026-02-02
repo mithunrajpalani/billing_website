@@ -231,46 +231,70 @@
     </div>
 
     <!-- html2canvas for image sharing -->
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="{{ url_for('static', filename='js/html2canvas.min.js') }}"></script>
     <script>
-        function shareOnWhatsApp() {
-            const text = "Bill Number: {{ bill.bill_number }}%0ADate: {{ bill.date.strftime('%d/%m/%Y') }}%0ATotal Amount: ₹{{ '{:.2f}'.format(bill.grand_total) }}%0ABalance: ₹{{ '{:.2f}'.format(bill.balance_amount) }}";
-            window.open(`https://wa.me/?text=${text}`, '_blank');
+        async function shareOnWhatsApp() {
+            const billContainer = document.querySelector('.bill-container');
+
+            // Show loading state or feedback if needed (optional)
+
+            try {
+                const canvas = await html2canvas(billContainer, {
+                    scale: 2,
+                    backgroundColor: "#ffffff",
+                    logging: false,
+                    useCORS: true
+                });
+
+                canvas.toBlob(async (blob) => {
+                    const file = new File([blob], `bill-{{ bill.bill_number }}.png`, { type: 'image/png' });
+
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        // Native sharing (works on Mobile for WhatsApp)
+                        try {
+                            await navigator.share({
+                                files: [file],
+                                title: 'Bill {{ bill.bill_number }}',
+                                text: 'Here is the bill receipt.'
+                            });
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                console.error('Share failed:', err);
+                                alert('Sharing failed. Downloading image instead.');
+                                downloadImage(canvas);
+                            }
+                        }
+                    } else {
+                        // Fallback for Desktop or unsupported browsers
+                        alert("Direct image sharing is not supported on this device/browser. The bill image will be downloaded, and you can attach it to WhatsApp manually.");
+                        downloadImage(canvas);
+                        window.open('https://wa.me/', '_blank');
+                    }
+                }, 'image/png');
+            } catch (e) {
+                console.error("Error creating bill image:", e);
+                alert("Could not generate bill image.");
+            }
         }
 
-        async function downloadBill() {
-            const billContainer = document.querySelector('.bill-container');
-            const canvas = await html2canvas(billContainer, {
-                scale: 2, // Higher quality
-                backgroundColor: "#ffffff",
-                logging: false,
-                useCORS: true
-            });
-
+        function downloadImage(canvas) {
             const link = document.createElement('a');
             link.download = `bill-{{ bill.bill_number }}.png`;
             link.href = canvas.toDataURL("image/png");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
 
-            // Still offer share on mobile if supported
-            if (navigator.share) {
-                canvas.toBlob(async (blob) => {
-                    const file = new File([blob], `bill-{{ bill.bill_number }}.png`, { type: 'image/png' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        try {
-                            await navigator.share({
-                                files: [file],
-                                title: 'Bill {{ bill.bill_number }}',
-                                text: 'Payment Receipt'
-                            });
-                        } catch (err) {
-                            console.log('Share dismissed or failed');
-                        }
-                    }
-                });
-            }
+        async function downloadBill() {
+            const billContainer = document.querySelector('.bill-container');
+            const canvas = await html2canvas(billContainer, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+                logging: false,
+                useCORS: true
+            });
+            downloadImage(canvas);
         }
     </script>
 </body>
