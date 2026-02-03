@@ -162,8 +162,8 @@
             <h1 style="font-size: 28px; margin-bottom: 5px;">{{ bill.company_name if bill.company_name else
                 settings.company_name }}</h1>
             <h2 style="margin-top: 0; font-size: 20px;">{{ bill.shop_name }}</h2>
-            <p>{{ settings.address }}</p>
-            <p>Mobile: {{ settings.mobile }}{{ ', ' + settings.mobile2 if settings.mobile2 else '' }}</p>
+            <p>{{ bill.shop_address }}</p>
+            <p>Mobile: {{ bill.shop_mobile }}{{ ', ' + bill.shop_mobile2 if bill.shop_mobile2 else '' }}</p>
             <p
                 style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px; margin-bottom: 5px; font-weight: bold; font-size: 14px;">
                 ESTIMATE</p>

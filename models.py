@@ -8,9 +8,11 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
+    settings = db.relationship('ShopSettings', backref='user', uselist=False, cascade="all, delete-orphan")
 
 class ShopSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     company_name = db.Column(db.String(150), default='ICEBERG')
     shop_name = db.Column(db.String(150), default='Sri Krishna Bakery')
     address = db.Column(db.String(300), default='Your Shop Address here...')
@@ -34,6 +36,7 @@ class Bill(db.Model):
     location = db.Column(db.String(150))
     shop_address = db.Column(db.String(300))
     shop_mobile = db.Column(db.String(20))
+    shop_mobile2 = db.Column(db.String(20))
     grand_total = db.Column(db.Float, nullable=False)
     advance_amount = db.Column(db.Float, default=0.0)
     discount_amount = db.Column(db.Float, default=0.0)

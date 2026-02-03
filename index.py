@@ -43,7 +43,9 @@ def serve_upload(filename):
 
 @app.context_processor
 def inject_settings():
-    return dict(settings=ShopSettings.query.first())
+    if current_user.is_authenticated:
+        return dict(settings=current_user.settings or ShopSettings())
+    return dict(settings=ShopSettings.query.first() or ShopSettings())
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -55,14 +57,16 @@ def seed_data():
         db.create_all()
         
         # Create default user if not exists
-        if not User.query.filter_by(username='admin').first():
+        admin = User.query.filter_by(username='admin').first()
+        if not admin:
             hashed_password = generate_password_hash('admin123', method='pbkdf2:sha256')
             admin = User(username='admin', password=hashed_password)
             db.session.add(admin)
+            db.session.commit()
         
-        # Create default shop settings if not exists
-        if not ShopSettings.query.first():
-            settings = ShopSettings()
+        # Create default shop settings for admin if not exists
+        if not admin.settings:
+            settings = ShopSettings(user_id=admin.id)
             db.session.add(settings)
             
         # Create initial items if table is empty
@@ -121,7 +125,7 @@ def index():
     fruit_items = Item.query.filter_by(category='Fruits', is_flavor=True).all()
     drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
     beeda_items = Item.query.filter_by(category='Beeda', is_flavor=True).all()
-    settings = ShopSettings.query.first() or ShopSettings()
+    settings = current_user.settings or ShopSettings()
     return render_template('dashboard.html', 
                           items=items, 
                           flavors=ice_cream_flavors, 
@@ -166,6 +170,11 @@ def signup():
         db.session.add(new_user)
         db.session.commit()
 
+        # Create default settings for new user
+        new_settings = ShopSettings(user_id=new_user.id)
+        db.session.add(new_settings)
+        db.session.commit()
+
         flash('Account created successfully! Please login.')
         return redirect(url_for('login'))
 
@@ -206,7 +215,7 @@ def generate_bill():
             except ValueError:
                 pass
 
-    settings = ShopSettings.query.first() or ShopSettings()
+    settings = current_user.settings or ShopSettings()
     bill_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
     new_bill = Bill(
@@ -217,6 +226,7 @@ def generate_bill():
         location=custom_location if custom_location else '',
         shop_address=settings.address,
         shop_mobile=settings.mobile,
+        shop_mobile2=settings.mobile2,
         grand_total=grand_total,
         advance_amount=advance_amount,
         discount_amount=discount_amount,
@@ -244,7 +254,9 @@ def generate_bill():
 @login_required
 def view_bill(bill_number):
     bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
-    settings = ShopSettings.query.first() or ShopSettings()
+    # Use settings from when the bill was created (already in bill record) 
+    # but fallback to current user settings if needed for any reason
+    settings = current_user.settings or ShopSettings()
     return render_template('bill_view.html', bill=bill, settings=settings)
 
 @app.route('/history')
@@ -296,7 +308,12 @@ def delete_item(item_id):
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    settings = ShopSettings.query.first()
+    settings = current_user.settings
+    if not settings:
+        settings = ShopSettings(user_id=current_user.id)
+        db.session.add(settings)
+        db.session.commit()
+    
     items = Item.query.all()
     if request.method == 'POST':
         settings.company_name = request.form.get('company_name')
