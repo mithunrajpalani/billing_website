@@ -27,10 +27,16 @@ else:
     # Ensure instance folder exists
     os.makedirs(os.path.join(basedir, 'instance'), exist_ok=True)
 
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = upload_folder
+
+# Log database type (obfuscate password if present)
+db_log_uri = db_uri
+if '@' in db_log_uri:
+    db_log_uri = db_log_uri.split('@')[1]
+print(f" * Using Database: {db_log_uri.split(':')[0]}...")
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)
 
@@ -65,6 +71,7 @@ def seed_data():
         # Create default user if not exists
         admin = User.query.filter_by(username='admin').first()
         if not admin:
+            print(" * Seeding: Creating default admin user...")
             hashed_password = generate_password_hash('admin123', method='pbkdf2:sha256')
             admin = User(username='admin', password=hashed_password)
             db.session.add(admin)
@@ -72,8 +79,10 @@ def seed_data():
         
         # Create default shop settings for admin if not exists
         if not admin.settings:
+            print(" * Seeding: Creating default admin settings...")
             settings = ShopSettings(user_id=admin.id)
             db.session.add(settings)
+            db.session.commit()
             
         # Create initial items if table is empty
         if not Item.query.first():
