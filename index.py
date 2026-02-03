@@ -296,12 +296,17 @@ def delete_bill(bill_id):
 @login_required
 def delete_item(item_id):
     item = Item.query.get_or_404(item_id)
+    item_name = item.name
     try:
         db.session.delete(item)
         db.session.commit()
-        flash(f'Item "{item.name}" deleted successfully')
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            return jsonify({'status': 'success', 'message': f'Item "{item_name}" deleted successfully'})
+        flash(f'Item "{item_name}" deleted successfully')
     except Exception as e:
         db.session.rollback()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+            return jsonify({'status': 'error', 'message': f'Error deleting item: {str(e)}'}), 500
         flash(f'Error deleting item: {str(e)}')
     return redirect(url_for('settings'))
 

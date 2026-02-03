@@ -89,13 +89,13 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
             {% for item in items %}
             {% if item.category == cat %}
-            <div class="form-group" style="display: flex; gap: 10px; align-items: flex-end;">
+            <div id="item-row-{{ item.id }}" class="form-group"
+                style="display: flex; gap: 10px; align-items: flex-end;">
                 <div style="flex-grow: 1;">
                     <label>{{ item.name }}{{ ' (Sub-item)' if item.is_flavor else '' }}</label>
                     <input type="number" name="price_{{ item.id }}" value="{{ item.price }}" step="0.01">
                 </div>
-                <button type="submit" formaction="{{ url_for('delete_item', item_id=item.id) }}"
-                    onclick="return confirm('Are you sure you want to delete {{ item.name }}?')" class="btn"
+                <button type="button" onclick="deleteItem({{ item.id }}, '{{ item.name }}')" class="btn"
                     style="background-color: #ffebee; color: #c62828; margin-bottom: 2px;">
                     Delete
                 </button>
@@ -130,4 +130,38 @@
         <button type="submit" class="btn btn-primary" style="margin-top: 20px; width: 100%;">Save All Changes</button>
     </form>
 </div>
+
+<script>
+    function deleteItem(itemId, itemName) {
+        if (!confirm(`Are you sure you want to delete "${itemName}"?`)) {
+            return;
+        }
+
+        fetch(`/delete_item/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const row = document.getElementById(`item-row-${itemId}`);
+                    if (row) {
+                        row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(20px)';
+                        setTimeout(() => row.remove(), 300);
+                    }
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the item.');
+            });
+    }
+</script>
 {% endblock %}
