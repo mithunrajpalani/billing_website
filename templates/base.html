@@ -52,8 +52,12 @@
     </main>
 
     <footer class="footer">
-        <div class="container">
+        <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
             <p>&copy; 2026 {{ settings.shop_name if settings else 'Sri Krishna Bakery' }}. All rights reserved.</p>
+            <div class="db-status"
+                style="font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: {{ '#e8f5e9' if db_type == 'Persistent' else '#fff3e0' }}; color: {{ '#2e7d32' if db_type == 'Persistent' else '#ef6c00' }};">
+                Database: <strong>{{ db_type }}</strong>
+            </div>
         </div>
     </footer>
 

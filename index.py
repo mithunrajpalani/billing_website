@@ -55,13 +55,17 @@ def serve_upload(filename):
 
 @app.context_processor
 def inject_settings():
+    db_type = 'Persistent' if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI'] else 'Temporary (SQLite)'
     if current_user.is_authenticated:
-        return dict(settings=current_user.settings or ShopSettings())
-    return dict(settings=ShopSettings.query.first() or ShopSettings())
+        return dict(settings=current_user.settings or ShopSettings(), db_type=db_type)
+    return dict(settings=ShopSettings.query.first() or ShopSettings(), db_type=db_type)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    try:
+        return User.query.get(int(user_id))
+    except:
+        return None
 
 # Create database and seed initial data
 def seed_data():
@@ -157,7 +161,7 @@ def login():
         password = request.form.get('password')
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            login_user(user)
+            login_user(user, remember=True)
             session.permanent = True
             return redirect(url_for('index'))
         else:
