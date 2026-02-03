@@ -18,8 +18,11 @@ if IS_VERCEL:
     os.makedirs(upload_folder, exist_ok=True)
 else:
     app = Flask(__name__)
-    db_uri = 'sqlite:///billing.db'
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    db_uri = 'sqlite:///' + os.path.join(basedir, 'instance', 'billing.db')
     upload_folder = os.path.join('static', 'uploads')
+    # Ensure instance folder exists
+    os.makedirs(os.path.join(basedir, 'instance'), exist_ok=True)
 
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
