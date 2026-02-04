@@ -212,17 +212,24 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
-            login_user(user, remember=True)
-            session.permanent = True
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password')
-    return render_template('login.html')
+    try:
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password, password):
+                login_user(user, remember=True)
+                session.permanent = True
+                return redirect(url_for('index'))
+            else:
+                flash('Invalid username or password')
+        return render_template('login.html')
+    except Exception as e:
+        print(f" * Error in login route: {e}")
+        # If DB isn't ready, at least show the page
+        if request.method == 'POST':
+            flash('Database connection error. Please try again in 1 minute.')
+        return render_template('login.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -348,8 +355,12 @@ def view_bill(bill_number):
 @app.route('/history')
 @login_required
 def history():
-    bills = Bill.query.order_by(Bill.date.desc()).all()
-    return render_template('history.html', bills=bills)
+    try:
+        bills = Bill.query.order_by(Bill.date.desc()).all()
+        return render_template('history.html', bills=bills)
+    except Exception as e:
+        print(f" * Error in history route: {e}")
+        return redirect(url_for('index'))
 
 @app.route('/clear_history', methods=['POST'])
 @login_required
@@ -399,92 +410,97 @@ def delete_item(item_id):
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    settings = current_user.settings
-    if not settings:
-        settings = ShopSettings(user_id=current_user.id)
-        db.session.add(settings)
-        db.session.commit()
-    
-    items = Item.query.all()
-    if request.method == 'POST':
-        settings.company_name = request.form.get('company_name')
-        settings.shop_name = request.form.get('shop_name')
-        settings.address = request.form.get('address')
-        settings.mobile = request.form.get('mobile')
-        settings.mobile2 = request.form.get('mobile2')
-        
-        # Handle QR Code Upload
-        if 'qr_code' in request.files:
-            file = request.files['qr_code']
-            if file and file.filename != '' and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                # Add timestamp to filename to avoid cache issues
-                filename = f"{int(datetime.now().timestamp())}_{filename}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                settings.qr_code_path = filename
-        
-        # Add new item if provided
-        new_item_name = request.form.get('new_item_name')
-        new_item_price = request.form.get('new_item_price')
-        new_item_category = request.form.get('new_item_category', 'Main')
-        is_sub_item = request.form.get('is_sub_item') == 'on'
-
-        if new_item_name and new_item_price:
-            existing_item = Item.query.filter_by(name=new_item_name).first()
-            if not existing_item:
-                new_item = Item(
-                    name=new_item_name, 
-                    price=float(new_item_price), 
-                    category=new_item_category,
-                    is_flavor=is_sub_item
-                )
-                db.session.add(new_item)
-            else:
-                flash(f'Item "{new_item_name}" already exists.')
-        
-        # Update prices
-        for item in items:
-            new_price = request.form.get(f'price_{item.id}')
-            if new_price:
-                item.price = float(new_price)
-        
-        # Account Management
-        new_username = request.form.get('new_username')
-        current_password = request.form.get('current_password')
-        new_password = request.form.get('new_password')
-        
-        if (new_username and new_username != current_user.username) or new_password:
-            if not current_password or not check_password_hash(current_user.password, current_password):
-                flash('Current password is required and must be correct to change credentials.')
-                return redirect(url_for('settings'))
-            
-            if new_username:
-                existing_user = User.query.filter(User.username == new_username, User.id != current_user.id).first()
-                if existing_user:
-                    flash(f'Username "{new_username}" is already taken.')
-                else:
-                    current_user.username = new_username
-            
-            if new_password:
-                current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
-            
-            flash('Login credentials updated successfully.')
-        
-        try:
+    try:
+        settings = current_user.settings
+        if not settings:
+            settings = ShopSettings(user_id=current_user.id)
+            db.session.add(settings)
             db.session.commit()
-            flash('Settings updated successfully')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating settings: {str(e)}')
-        return redirect(url_for('settings'))
-    
-    return render_template('settings.html', settings=settings, items=items)
+        
+        items = Item.query.all()
+        if request.method == 'POST':
+            settings.company_name = request.form.get('company_name')
+            settings.shop_name = request.form.get('shop_name')
+            settings.address = request.form.get('address')
+            settings.mobile = request.form.get('mobile')
+            settings.mobile2 = request.form.get('mobile2')
+            
+            # Handle QR Code Upload
+            if 'qr_code' in request.files:
+                file = request.files['qr_code']
+                if file and file.filename != '' and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    # Add timestamp to filename to avoid cache issues
+                    filename = f"{int(datetime.now().timestamp())}_{filename}"
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    settings.qr_code_path = filename
+            
+            # Add new item if provided
+            new_item_name = request.form.get('new_item_name')
+            new_item_price = request.form.get('new_item_price')
+            new_item_category = request.form.get('new_item_category', 'Main')
+            is_sub_item = request.form.get('is_sub_item') == 'on'
+
+            if new_item_name and new_item_price:
+                existing_item = Item.query.filter_by(name=new_item_name).first()
+                if not existing_item:
+                    new_item = Item(
+                        name=new_item_name, 
+                        price=float(new_item_price), 
+                        category=new_item_category,
+                        is_flavor=is_sub_item
+                    )
+                    db.session.add(new_item)
+                else:
+                    flash(f'Item "{new_item_name}" already exists.')
+            
+            # Update prices
+            for item in items:
+                new_price = request.form.get(f'price_{item.id}')
+                if new_price:
+                    item.price = float(new_price)
+            
+            # Account Management
+            new_username = request.form.get('new_username')
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            
+            if (new_username and new_username != current_user.username) or new_password:
+                if not current_password or not check_password_hash(current_user.password, current_password):
+                    flash('Current password is required and must be correct to change credentials.')
+                    return redirect(url_for('settings'))
+                
+                if new_username:
+                    existing_user = User.query.filter(User.username == new_username, User.id != current_user.id).first()
+                    if existing_user:
+                        flash(f'Username "{new_username}" is already taken.')
+                    else:
+                        current_user.username = new_username
+                
+                if new_password:
+                    current_user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+                
+                flash('Login credentials updated successfully.')
+            
+            try:
+                db.session.commit()
+                flash('Settings updated successfully')
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error updating settings: {str(e)}')
+            return redirect(url_for('settings'))
+        
+        return render_template('settings.html', settings=settings, items=items)
+    except Exception as e:
+        print(f" * Error in settings route: {e}")
+        return redirect(url_for('index'))
 
 @app.errorhandler(500)
 def handle_500(e):
-    print(f" * CRITICAL 500 ERROR: {e}")
-    # Show more info in logs, but keep user page simple
-    return "Internal Server Error. Please check the Vercel logs or visit /db-test for diagnostics.", 500
+    # Try to extract the original exception if possible
+    orig_msg = str(getattr(e, 'original_exception', e))
+    print(f" * CRITICAL 500 ERROR: {orig_msg}")
+    return f"Internal Server Error: {orig_msg}. <br><br>Visit /db-test for details.", 500
 
 @app.route('/db-test')
 def db_test():
