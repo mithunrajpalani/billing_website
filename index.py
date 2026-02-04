@@ -80,12 +80,12 @@ def inject_settings():
         
         # Ensure strings for display
         display_settings = {
-            'shop_name': settings_obj.shop_name or 'Sri Krishna Bakery',
-            'company_name': settings_obj.company_name or 'ICEBERG',
-            'address': settings_obj.address or 'Your Shop Address here...',
-            'mobile': settings_obj.mobile or '9876543210',
-            'mobile2': settings_obj.mobile2 or '',
-            'qr_code_path': settings_obj.qr_code_path or ''
+            'shop_name': getattr(settings_obj, 'shop_name', 'Sri Krishna Bakery') or 'Sri Krishna Bakery',
+            'company_name': getattr(settings_obj, 'company_name', 'ICEBERG') or 'ICEBERG',
+            'address': getattr(settings_obj, 'address', 'Your Shop Address here...') or 'Your Shop Address here...',
+            'mobile': getattr(settings_obj, 'mobile', '9876543210') or '9876543210',
+            'mobile2': getattr(settings_obj, 'mobile2', '') or '',
+            'qr_code_path': getattr(settings_obj, 'qr_code_path', '') or ''
         }
             
         return dict(settings=SimpleNamespace(**display_settings), db_type=db_type)
@@ -479,6 +479,12 @@ def settings():
         return redirect(url_for('settings'))
     
     return render_template('settings.html', settings=settings, items=items)
+
+@app.errorhandler(500)
+def handle_500(e):
+    print(f" * CRITICAL 500 ERROR: {e}")
+    # Show more info in logs, but keep user page simple
+    return "Internal Server Error. Please check the Vercel logs or visit /db-test for diagnostics.", 500
 
 @app.route('/db-test')
 def db_test():

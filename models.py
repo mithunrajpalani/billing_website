@@ -20,6 +20,15 @@ class ShopSettings(db.Model):
     mobile2 = db.Column(db.String(20), default='', server_default='')
     qr_code_path = db.Column(db.String(255), default='', server_default='')
 
+    def __init__(self, **kwargs):
+        super(ShopSettings, self).__init__(**kwargs)
+        if not self.company_name: self.company_name = 'ICEBERG'
+        if not self.shop_name: self.shop_name = 'Sri Krishna Bakery'
+        if not self.address: self.address = 'Your Shop Address here...'
+        if not self.mobile: self.mobile = '9876543210'
+        if not self.mobile2: self.mobile2 = ''
+        if not self.qr_code_path: self.qr_code_path = ''
+
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
