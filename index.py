@@ -22,6 +22,15 @@ if IS_VERCEL:
     
     if db_uri.startswith("postgres://"):
         db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+    
+    # Clean problematic query parameters (like ?supa=... or others that psycopg2 dislikes)
+    if "postgresql" in db_uri and "?" in db_uri:
+        # Keep the base URI and strip parameters that often cause "invalid connection option"
+        base_uri = db_uri.split("?")[0]
+        # For Vercel/Supabase, usually no parameters are strictly needed by psycopg2 
+        # unless it's sslmode, but default is often fine.
+        db_uri = base_uri
+        
     upload_folder = '/tmp/uploads'
     os.makedirs(upload_folder, exist_ok=True)
 else:
@@ -506,9 +515,12 @@ def handle_500(e):
 def db_test():
     try:
         db.session.execute(db.text('SELECT 1'))
-        return f"Database Connection Header: {app.config['SQLALCHEMY_DATABASE_URI'].split(':')[0]}... OK"
+        # Mask password in URI for display
+        uri_parts = app.config['SQLALCHEMY_DATABASE_URI'].split('@')
+        masked_uri = uri_parts[-1] if len(uri_parts) > 1 else app.config['SQLALCHEMY_DATABASE_URI']
+        return f"Database Connected successfully! <br>Target: {masked_uri} <br><br>You can now go back to <a href='/'>Login</a>"
     except Exception as e:
-        return f"Database Connection Error: {str(e)}", 500
+        return f"Database Connection Error: {str(e)} <br><br>Current URI (masked): {app.config['SQLALCHEMY_DATABASE_URI'].split('@')[-1] if '@' in app.config['SQLALCHEMY_DATABASE_URI'] else 'SQLite'}", 500
 
 # Run initialization once
 _initialized = False
