@@ -11,6 +11,11 @@ from types import SimpleNamespace
 # Determine if we are running on Vercel or similar read-only environment
 IS_VERCEL = "VERCEL" in os.environ
 
+def get_now():
+    """Get current time in IST (UTC+5:30)"""
+    # Vercel servers use UTC, so we add 5.5 hours for IST
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
 if IS_VERCEL:
     # On Vercel, the only writable directory is /tmp
     app = Flask(__name__, instance_path='/tmp')
@@ -214,7 +219,7 @@ def index():
                               drink_items=drink_items,
                               beeda_items=beeda_items,
                               settings=settings_display, 
-                              date=datetime.now())
+                              date=get_now())
     except Exception as e:
         print(f" * Error in index route: {e}")
         return "Database is still initializing or connection failed. Please refresh in a few seconds.", 503
@@ -289,25 +294,25 @@ def generate_bill():
     custom_location = data.get('location')
     bill_date_str = data.get('date')
     
-    bill_date = datetime.now()
+    bill_date = get_now()
     if bill_date_str:
         try:
             # Handle dd/mm/yyyy format
             bill_date = datetime.strptime(bill_date_str, '%d/%m/%Y')
             # Add current time to the selected date
-            now = datetime.now()
+            now = get_now()
             bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
         except ValueError:
             try:
                 # Fallback to standard ISO format
                 bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
-                now = datetime.now()
+                now = get_now()
                 bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
             except ValueError:
                 pass
 
     settings = current_user.settings or ShopSettings()
-    bill_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    bill_number = f"BILL-{get_now().strftime('%Y%m%d%H%M%S')}"
     
     new_bill = Bill(
         bill_number=bill_number,
@@ -440,7 +445,7 @@ def settings():
                 if file and file.filename != '' and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
                     # Add timestamp to filename to avoid cache issues
-                    filename = f"{int(datetime.now().timestamp())}_{filename}"
+                    filename = f"{int(get_now().timestamp())}_{filename}"
                     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                     settings.qr_code_path = filename
             

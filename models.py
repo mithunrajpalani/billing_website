@@ -36,10 +36,13 @@ class Item(db.Model):
     category = db.Column(db.String(50)) # e.g., 'Main', 'Ice Cream'
     is_flavor = db.Column(db.Boolean, default=False) # For Ice Cream flavors
 
+def get_ist_now():
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
 class Bill(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     bill_number = db.Column(db.String(20), unique=True, nullable=False)
-    date = db.Column(db.DateTime, default=datetime.now)
+    date = db.Column(db.DateTime, default=get_ist_now)
     company_name = db.Column(db.String(150))
     shop_name = db.Column(db.String(150))
     location = db.Column(db.String(150))
