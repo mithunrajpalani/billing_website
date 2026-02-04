@@ -13,12 +13,12 @@ class User(UserMixin, db.Model):
 class ShopSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    company_name = db.Column(db.String(150), default='ICEBERG')
-    shop_name = db.Column(db.String(150), default='Sri Krishna Bakery')
-    address = db.Column(db.String(300), default='Your Shop Address here...')
-    mobile = db.Column(db.String(20), default='9876543210')
-    mobile2 = db.Column(db.String(20), default='')
-    qr_code_path = db.Column(db.String(255), default='')
+    company_name = db.Column(db.String(150), default='ICEBERG', server_default='ICEBERG')
+    shop_name = db.Column(db.String(150), default='Sri Krishna Bakery', server_default='Sri Krishna Bakery')
+    address = db.Column(db.String(300), default='Your Shop Address here...', server_default='Your Shop Address here...')
+    mobile = db.Column(db.String(20), default='9876543210', server_default='9876543210')
+    mobile2 = db.Column(db.String(20), default='', server_default='')
+    qr_code_path = db.Column(db.String(255), default='', server_default='')
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)

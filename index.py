@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from models import db, User, ShopSettings, Item, Bill, BillItem
 from datetime import datetime, timedelta
 import json
+from types import SimpleNamespace
 
 # Determine if we are running on Vercel or similar read-only environment
 IS_VERCEL = "VERCEL" in os.environ
@@ -59,20 +60,46 @@ def serve_upload(filename):
 
 @app.context_processor
 def inject_settings():
-    db_type = 'Persistent' if 'postgresql' in app.config.get('SQLALCHEMY_DATABASE_URI', '') else 'Temporary (SQLite)'
+    db_uri_config = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    db_type = 'Persistent' if 'postgresql' in db_uri_config else 'Temporary (SQLite)'
     try:
-        # Avoid database calls if tables don't exist yet
         settings_record = None
         if current_user.is_authenticated:
-            settings_record = current_user.settings
+            try:
+                settings_record = current_user.settings
+            except Exception as e:
+                print(f" * Error fetching current_user.settings: {e}")
         
         if not settings_record:
-            settings_record = ShopSettings.query.first()
+            try:
+                settings_record = ShopSettings.query.first()
+            except Exception as e:
+                print(f" * Error fetching ShopSettings.query.first(): {e}")
             
-        return dict(settings=settings_record or ShopSettings(), db_type=db_type)
+        settings_obj = settings_record if settings_record else ShopSettings()
+        
+        # Ensure strings for display
+        display_settings = {
+            'shop_name': settings_obj.shop_name or 'Sri Krishna Bakery',
+            'company_name': settings_obj.company_name or 'ICEBERG',
+            'address': settings_obj.address or 'Your Shop Address here...',
+            'mobile': settings_obj.mobile or '9876543210',
+            'mobile2': settings_obj.mobile2 or '',
+            'qr_code_path': settings_obj.qr_code_path or ''
+        }
+            
+        return dict(settings=SimpleNamespace(**display_settings), db_type=db_type)
     except Exception as e:
-        print(f"Error in inject_settings: {e}")
-        return dict(settings=ShopSettings(), db_type=db_type)
+        print(f" * Critical error in inject_settings: {e}")
+        fallback = {
+            'shop_name': 'Sri Krishna Bakery', 
+            'company_name': 'ICEBERG',
+            'address': 'Your Shop Address here...',
+            'mobile': '9876543210',
+            'mobile2': '',
+            'qr_code_path': ''
+        }
+        return dict(settings=SimpleNamespace(**fallback), db_type=db_type)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -153,20 +180,35 @@ def seed_data():
 @app.route('/')
 @login_required
 def index():
-    items = Item.query.filter_by(is_flavor=False).all()
-    ice_cream_flavors = Item.query.filter_by(category='Ice Cream', is_flavor=True).all()
-    fruit_items = Item.query.filter_by(category='Fruits', is_flavor=True).all()
-    drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
-    beeda_items = Item.query.filter_by(category='Beeda', is_flavor=True).all()
-    settings = current_user.settings or ShopSettings()
-    return render_template('dashboard.html', 
-                          items=items, 
-                          flavors=ice_cream_flavors, 
-                          fruit_items=fruit_items,
-                          drink_items=drink_items,
-                          beeda_items=beeda_items,
-                          settings=settings, 
-                          date=datetime.now())
+    try:
+        items = Item.query.filter_by(is_flavor=False).all()
+        ice_cream_flavors = Item.query.filter_by(category='Ice Cream', is_flavor=True).all()
+        fruit_items = Item.query.filter_by(category='Fruits', is_flavor=True).all()
+        drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
+        beeda_items = Item.query.filter_by(category='Beeda', is_flavor=True).all()
+        
+        settings_record = current_user.settings or ShopSettings()
+        # Create a display object for consistency
+        settings_display = SimpleNamespace(
+            shop_name=settings_record.shop_name or 'Sri Krishna Bakery',
+            company_name=settings_record.company_name or 'ICEBERG',
+            address=settings_record.address or 'Your Shop Address here...',
+            mobile=settings_record.mobile or '9876543210',
+            mobile2=settings_record.mobile2 or '',
+            qr_code_path=settings_record.qr_code_path or ''
+        )
+        
+        return render_template('dashboard.html', 
+                              items=items, 
+                              flavors=ice_cream_flavors, 
+                              fruit_items=fruit_items,
+                              drink_items=drink_items,
+                              beeda_items=beeda_items,
+                              settings=settings_display, 
+                              date=datetime.now())
+    except Exception as e:
+        print(f" * Error in index route: {e}")
+        return "Database is still initializing or connection failed. Please refresh in a few seconds.", 503
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -286,11 +328,22 @@ def generate_bill():
 @app.route('/view_bill/<bill_number>')
 @login_required
 def view_bill(bill_number):
-    bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
-    # Use settings from when the bill was created (already in bill record) 
-    # but fallback to current user settings if needed for any reason
-    settings = current_user.settings or ShopSettings()
-    return render_template('bill_view.html', bill=bill, settings=settings)
+    try:
+        bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
+        # Use current settings as fallback for UI elements not in the bill record
+        settings_record = current_user.settings or ShopSettings()
+        settings_display = SimpleNamespace(
+            shop_name=settings_record.shop_name or 'Sri Krishna Bakery',
+            company_name=settings_record.company_name or 'ICEBERG',
+            address=settings_record.address or 'Your Shop Address here...',
+            mobile=settings_record.mobile or '9876543210',
+            mobile2=settings_record.mobile2 or '',
+            qr_code_path=settings_record.qr_code_path or ''
+        )
+        return render_template('bill_view.html', bill=bill, settings=settings_display)
+    except Exception as e:
+        print(f" * Error in view_bill route: {e}")
+        return redirect(url_for('index'))
 
 @app.route('/history')
 @login_required
