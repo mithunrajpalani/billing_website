@@ -13,8 +13,12 @@ IS_VERCEL = "VERCEL" in os.environ
 if IS_VERCEL:
     # On Vercel, the only writable directory is /tmp
     app = Flask(__name__, instance_path='/tmp')
-    # Use DATABASE_URL from environment for persistence, otherwise fallback to ephemeral /tmp
-    db_uri = os.environ.get('DATABASE_URL', 'sqlite:////tmp/billing.db')
+    # Try common Vercel/Supabase environment variables
+    db_uri = os.environ.get('DATABASE_URL') or \
+             os.environ.get('POSTGRES_URL') or \
+             os.environ.get('POSTGRES_URL_NON_POOLING') or \
+             'sqlite:////tmp/billing.db'
+    
     if db_uri.startswith("postgres://"):
         db_uri = db_uri.replace("postgres://", "postgresql://", 1)
     upload_folder = '/tmp/uploads'
