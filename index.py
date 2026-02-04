@@ -59,10 +59,20 @@ def serve_upload(filename):
 
 @app.context_processor
 def inject_settings():
-    db_type = 'Persistent' if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI'] else 'Temporary (SQLite)'
-    if current_user.is_authenticated:
-        return dict(settings=current_user.settings or ShopSettings(), db_type=db_type)
-    return dict(settings=ShopSettings.query.first() or ShopSettings(), db_type=db_type)
+    db_type = 'Persistent' if 'postgresql' in app.config.get('SQLALCHEMY_DATABASE_URI', '') else 'Temporary (SQLite)'
+    try:
+        # Avoid database calls if tables don't exist yet
+        settings_record = None
+        if current_user.is_authenticated:
+            settings_record = current_user.settings
+        
+        if not settings_record:
+            settings_record = ShopSettings.query.first()
+            
+        return dict(settings=settings_record or ShopSettings(), db_type=db_type)
+    except Exception as e:
+        print(f"Error in inject_settings: {e}")
+        return dict(settings=ShopSettings(), db_type=db_type)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -417,11 +427,27 @@ def settings():
     
     return render_template('settings.html', settings=settings, items=items)
 
-try:
-    with app.app_context():
-        seed_data()
-except Exception as e:
-    print(f"Error seeding data: {e}")
+@app.route('/db-test')
+def db_test():
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return f"Database Connection Header: {app.config['SQLALCHEMY_DATABASE_URI'].split(':')[0]}... OK"
+    except Exception as e:
+        return f"Database Connection Error: {str(e)}", 500
+
+# Run initialization once
+_initialized = False
+@app.before_request
+def safe_init():
+    global _initialized
+    if not _initialized:
+        try:
+            seed_data()
+            _initialized = True
+        except Exception as e:
+            print(f"Lazy initialization error: {e}")
 
 if __name__ == '__main__':
+    with app.app_context():
+        seed_data()
     app.run(debug=True, host='0.0.0.0', port=5000)
