@@ -75,7 +75,12 @@ def serve_upload(filename):
 @app.context_processor
 def inject_settings():
     db_uri_config = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-    db_type = 'Persistent' if 'postgresql' in db_uri_config else 'Temporary (SQLite)'
+    if 'postgresql' in db_uri_config:
+        db_type = 'Persistent (PostgreSQL)'
+    elif IS_VERCEL:
+        db_type = 'Temporary (Cloud SQLite)'
+    else:
+        db_type = 'Persistent (Local SQLite)'
     try:
         settings_record = None
         if current_user.is_authenticated:
@@ -498,6 +503,7 @@ def settings():
             
             try:
                 db.session.commit()
+                db.session.refresh(settings) # Refresh to get latest state
                 flash('Settings updated successfully')
             except Exception as e:
                 db.session.rollback()
