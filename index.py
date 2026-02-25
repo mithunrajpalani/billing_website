@@ -42,9 +42,10 @@ else:
     app = Flask(__name__)
     basedir = os.path.abspath(os.path.dirname(__file__))
     db_uri = 'sqlite:///' + os.path.join(basedir, 'instance', 'billing.db')
-    upload_folder = os.path.join('static', 'uploads')
-    # Ensure instance folder exists
+    upload_folder = os.path.join(basedir, 'static', 'uploads')
+    # Ensure folders exist
     os.makedirs(os.path.join(basedir, 'instance'), exist_ok=True)
+    os.makedirs(upload_folder, exist_ok=True)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
@@ -91,24 +92,38 @@ def inject_settings():
         
         if not settings_record:
             try:
+                # If no user settings found, or user not logged in, get the first settings system-wide
                 settings_record = ShopSettings.query.first()
             except Exception as e:
                 print(f" * Error fetching ShopSettings.query.first(): {e}")
-            
-        settings_obj = settings_record if settings_record else ShopSettings()
+        
+        # FINAL FALLBACK: If current user HAS settings but no QR code, 
+        # try to find ANY settings record with a QR code to show as a global default
+        if settings_record and not getattr(settings_record, 'qr_code_path', None):
+            global_qr_setting = ShopSettings.query.filter(ShopSettings.qr_code_path != '').first()
+            if global_qr_setting:
+                # We borrow the QR code path from another user's setting (likely the admin)
+                settings_obj = settings_record
+                display_qr_path = global_qr_setting.qr_code_path
+            else:
+                settings_obj = settings_record
+                display_qr_path = ''
+        else:
+            settings_obj = settings_record if settings_record else ShopSettings()
+            display_qr_path = getattr(settings_obj, 'qr_code_path', '') or ''
         
         # Helper to get valid settings dictionary
-        def get_display_settings(obj):
+        def get_display_settings(obj, qr_path):
             return {
                 'shop_name': getattr(obj, 'shop_name', 'Sri Krishna Bakery') or 'Sri Krishna Bakery',
                 'company_name': getattr(obj, 'company_name', 'ICEBERG') or 'ICEBERG',
                 'address': getattr(obj, 'address', 'Your Shop Address here...') or 'Your Shop Address here...',
                 'mobile': getattr(obj, 'mobile', '9876543210') or '9876543210',
                 'mobile2': getattr(obj, 'mobile2', '') or '',
-                'qr_code_path': getattr(obj, 'qr_code_path', '') or ''
+                'qr_code_path': qr_path
             }
             
-        settings_data = get_display_settings(settings_obj)
+        settings_data = get_display_settings(settings_obj, display_qr_path)
         return dict(settings=SimpleNamespace(**settings_data), db_type=db_type, get_display_settings=get_display_settings)
     except Exception as e:
         print(f" * Critical error in inject_settings: {e}")

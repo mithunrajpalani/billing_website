@@ -212,12 +212,15 @@
         </div>
 
         {% if settings.qr_code_path %}
-        <div
-            style="text-align: center; margin-top: 25px; padding: 15px; border: 1px dashed #ddd; border-radius: 10px; display: inline-block; width: auto; margin-left: auto; margin-right: auto; display: block;">
-            <p style="margin-bottom: 10px; font-size: 14px; font-weight: bold; color: var(--text-color);">Scan to Pay
-            </p>
-            <img src="{{ url_for('serve_upload', filename=settings.qr_code_path) }}" alt="Payment QR Code"
-                style="max-height: 180px; width: auto;">
+        <div class="qr-payment-section"
+            style="text-align: center; margin-top: 30px; padding: 20px; border: 2px dashed var(--accent-color, #4CAF50); border-radius: 12px; background: rgba(76, 175, 80, 0.05); margin-bottom: 20px;">
+            <p style="margin-bottom: 12px; font-size: 16px; font-weight: bold; color: #333;">Scan & Pay Here</p>
+            <div
+                style="background: white; padding: 10px; display: inline-block; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <img src="{{ url_for('serve_upload', filename=settings.qr_code_path) }}" alt="Payment QR Code"
+                    style="max-width: 200px; height: auto; display: block; margin: 0 auto;">
+            </div>
+            <p style="margin-top: 10px; font-size: 12px; color: #666;">UPI / Bank Transfer Supported</p>
         </div>
         {% endif %}
 
