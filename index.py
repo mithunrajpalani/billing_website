@@ -77,10 +77,10 @@ def inject_settings():
     db_uri_config = app.config.get('SQLALCHEMY_DATABASE_URI', '')
     if 'postgresql' in db_uri_config:
         db_type = 'Persistent (PostgreSQL)'
-    elif IS_VERCEL:
-        db_type = 'Temporary (Cloud SQLite)'
     else:
+        # Default to Persistent for local SQLite as requested
         db_type = 'Persistent (Local SQLite)'
+    
     try:
         settings_record = None
         if current_user.is_authenticated:
@@ -97,17 +97,19 @@ def inject_settings():
             
         settings_obj = settings_record if settings_record else ShopSettings()
         
-        # Ensure strings for display
-        display_settings = {
-            'shop_name': getattr(settings_obj, 'shop_name', 'Sri Krishna Bakery') or 'Sri Krishna Bakery',
-            'company_name': getattr(settings_obj, 'company_name', 'ICEBERG') or 'ICEBERG',
-            'address': getattr(settings_obj, 'address', 'Your Shop Address here...') or 'Your Shop Address here...',
-            'mobile': getattr(settings_obj, 'mobile', '9876543210') or '9876543210',
-            'mobile2': getattr(settings_obj, 'mobile2', '') or '',
-            'qr_code_path': getattr(settings_obj, 'qr_code_path', '') or ''
-        }
+        # Helper to get valid settings dictionary
+        def get_display_settings(obj):
+            return {
+                'shop_name': getattr(obj, 'shop_name', 'Sri Krishna Bakery') or 'Sri Krishna Bakery',
+                'company_name': getattr(obj, 'company_name', 'ICEBERG') or 'ICEBERG',
+                'address': getattr(obj, 'address', 'Your Shop Address here...') or 'Your Shop Address here...',
+                'mobile': getattr(obj, 'mobile', '9876543210') or '9876543210',
+                'mobile2': getattr(obj, 'mobile2', '') or '',
+                'qr_code_path': getattr(obj, 'qr_code_path', '') or ''
+            }
             
-        return dict(settings=SimpleNamespace(**display_settings), db_type=db_type)
+        settings_data = get_display_settings(settings_obj)
+        return dict(settings=SimpleNamespace(**settings_data), db_type=db_type, get_display_settings=get_display_settings)
     except Exception as e:
         print(f" * Critical error in inject_settings: {e}")
         fallback = {
@@ -206,16 +208,8 @@ def index():
         drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
         beeda_items = Item.query.filter_by(category='Beeda', is_flavor=True).all()
         
-        settings_record = current_user.settings or ShopSettings()
-        # Create a display object for consistency
-        settings_display = SimpleNamespace(
-            shop_name=settings_record.shop_name or 'Sri Krishna Bakery',
-            company_name=settings_record.company_name or 'ICEBERG',
-            address=settings_record.address or 'Your Shop Address here...',
-            mobile=settings_record.mobile or '9876543210',
-            mobile2=settings_record.mobile2 or '',
-            qr_code_path=settings_record.qr_code_path or ''
-        )
+        settings_context = inject_settings()
+        settings_display = settings_context['settings']
         
         return render_template('dashboard.html', 
                               items=items, 
@@ -356,16 +350,9 @@ def generate_bill():
 def view_bill(bill_number):
     try:
         bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
-        # Use current settings as fallback for UI elements not in the bill record
-        settings_record = current_user.settings or ShopSettings()
-        settings_display = SimpleNamespace(
-            shop_name=settings_record.shop_name or 'Sri Krishna Bakery',
-            company_name=settings_record.company_name or 'ICEBERG',
-            address=settings_record.address or 'Your Shop Address here...',
-            mobile=settings_record.mobile or '9876543210',
-            mobile2=settings_record.mobile2 or '',
-            qr_code_path=settings_record.qr_code_path or ''
-        )
+        # Use centralized settings logic to ensure QR path is always present if it exists in DB
+        settings_context = inject_settings()
+        settings_display = settings_context['settings']
         return render_template('bill_view.html', bill=bill, settings=settings_display)
     except Exception as e:
         print(f" * Error in view_bill route: {e}")
