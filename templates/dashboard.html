@@ -8,7 +8,7 @@
             <div>
                 <label for="bill-date"
                     style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Bill Date</label>
-                <input type="text" id="bill-date" value="{{ date.strftime('%d/%m/%Y') }}" placeholder="dd/mm/yyyy">
+                <input type="date" id="bill-date" value="{{ date.strftime('%Y-%m-%d') }}">
             </div>
             <div>
                 <label for="bill-time"
