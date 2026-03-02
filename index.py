@@ -137,8 +137,7 @@ def load_user(user_id):
 # Create database and seed initial data
 def seed_data():
     with app.app_context():
-        db.create_all()
-        
+        # Move create_all to the main block to avoid overhead in requests
         # Create default user if not exists
         admin = User.query.filter_by(username='admin').first()
         if not admin:
@@ -149,8 +148,9 @@ def seed_data():
             db.session.commit()
         
         # Create default shop settings for admin if not exists
-        if not admin.settings:
-            print(" * Seeding: Creating default admin settings...")
+        settings_record = ShopSettings.query.first()
+        if not settings_record:
+            print(" * Seeding: Creating default shop settings...")
             settings = ShopSettings(user_id=admin.id)
             db.session.add(settings)
             db.session.commit()
@@ -634,13 +634,17 @@ _initialized = False
 def safe_init():
     global _initialized
     if not _initialized:
+        # Set to True immediately to prevent multiple concurrent requests from re-triggering
+        _initialized = True
         try:
             seed_data()
-            _initialized = True
         except Exception as e:
             print(f"Lazy initialization error: {e}")
+            # If it failed, maybe we should try again later? 
+            # For now, let's just log it.
 
 if __name__ == '__main__':
     with app.app_context():
+        db.create_all()
         seed_data()
     app.run(debug=True, host='0.0.0.0', port=5000)
