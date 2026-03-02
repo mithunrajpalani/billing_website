@@ -451,45 +451,26 @@ def view_bill(bill_number):
         settings_context = inject_settings()
         settings_display = settings_context['settings']
         
-        # Determine the correct QR path (prioritize bill snapshot)
-        qr_path = bill.qr_code_path if bill.qr_code_path else settings_display.qr_code_path
+        # NEW REQUIREMENT: Load fixed image from local folder 'static/images/bill_footer'
         qr_code_base64 = ""
-        qr_debug_info = f"QR Path: {qr_path}, Bill Snapshot: {bill.qr_code_path}, Settings QR: {settings_display.qr_code_path}"
+        footer_dir = os.path.join(app.root_path, 'static', 'images', 'bill_footer')
         
-        if qr_path:
-            print(f" * DEBUG: Attempting to fetch QR from {qr_path}...")
-            # Convert image to Base64 server-side to ensure 100% reliable capture by html2canvas
-            if supabase:
+        if os.path.exists(footer_dir):
+            # Find the first image file in the folder
+            image_files = [f for f in os.listdir(footer_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+            if image_files:
+                footer_img_path = os.path.join(footer_dir, image_files[0])
                 try:
-                    # Download from Supabase Storage
-                    print(f" * DEBUG: Fetching from Supabase Bucket: {SUPABASE_BUCKET} Path: {qr_path}")
-                    response = supabase.storage.from_(SUPABASE_BUCKET).download(qr_path)
-                    if response:
-                        print(f" * DEBUG: Supabase download successful (Size: {len(response)} bytes)")
-                        encoded_string = base64.b64encode(response).decode('utf-8')
-                        mime_type, _ = mimetypes.guess_type(qr_path)
-                        if not mime_type:
-                            mime_type = "image/png"
+                    print(f" * DEBUG: Loading footer image from {footer_img_path}")
+                    with open(footer_img_path, "rb") as img_file:
+                        encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
+                        mime_type, _ = mimetypes.guess_type(footer_img_path)
+                        if not mime_type: mime_type = "image/png"
                         qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
-                    else:
-                        print(f" * ERROR: Supabase download returned no data for {qr_path}")
                 except Exception as e:
-                    print(f" * ERROR: Fetching from Supabase failed for {qr_path}: {e}")
-            else:
-                print(" * ERROR: Supabase Client not initialized, falling back to local...")
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_path)
-                if os.path.exists(full_path):
-                    try:
-                        with open(full_path, "rb") as image_file:
-                            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                            mime_type, _ = mimetypes.guess_type(full_path)
-                            if not mime_type:
-                                mime_type = "image/png"
-                            qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
-                    except Exception as e:
-                        print(f" * ERROR: Local QR to Base64 failed: {e}")
+                    print(f" * ERROR: Local footer image loading failed: {e}")
         
-        return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64, qr_debug_info=qr_debug_info)
+        return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64)
     except Exception as e:
         print(f" * Error in view_bill route: {e}")
         return redirect(url_for('index'))
@@ -569,38 +550,6 @@ def settings():
             settings.mobile = request.form.get('mobile')
             settings.mobile2 = request.form.get('mobile2')
             
-            # Handle QR Code Upload - PRODUCTION READY SUPABASE LOGIC
-            if 'qr_code' in request.files:
-                file = request.files['qr_code']
-                if file and file.filename != '' and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    # Add timestamp to filename to avoid cache issues
-                    filename = f"{int(get_now().timestamp())}_{filename}"
-                    
-                    if supabase:
-                        try:
-                            # Read file content for Supabase upload
-                            file_content = file.read()
-                            # Reset file pointer if needed else use the content directly
-                            storage_path = f"qr_codes/{filename}"
-                            
-                            # Upload to Supabase Storage
-                            res = supabase.storage.from_(SUPABASE_BUCKET).upload(
-                                path=storage_path,
-                                file=file_content,
-                                file_options={"content-type": mimetypes.guess_type(filename)[0] or "image/png"}
-                            )
-                            
-                            settings.qr_code_path = storage_path
-                            print(f" * DEBUG: QR Code uploaded to Supabase: {storage_path}")
-                        except Exception as e:
-                            print(f" * ERROR: Supabase upload failed: {e}")
-                            flash(f"Error uploading to Supabase: {str(e)}")
-                    else:
-                        flash("Supabase is not configured. QR Code not saved.")
-                elif file and file.filename != '':
-                    print(f" * DEBUG: QR Code upload failed - invalid file or extension: {file.filename}")
-            
             # Add new item if provided
             new_item_name = request.form.get('new_item_name')
             new_item_price = request.form.get('new_item_price')
@@ -657,33 +606,12 @@ def settings():
                 flash(f'Error updating settings: {str(e)}')
             return redirect(url_for('settings'))
         
-        return render_template('settings.html', settings=settings, items=items)
+        categories = ['Main', 'Ice Cream', 'Fruits', 'Beeda', 'Welcome Drinks']
+        return render_template('settings.html', settings=settings, items=items, categories=categories)
     except Exception as e:
         print(f" * Error in settings route: {e}")
         return redirect(url_for('index'))
 
-@app.route('/delete_qr', methods=['POST'])
-@login_required
-def delete_qr():
-    try:
-        settings = ShopSettings.query.first()
-        if settings and settings.qr_code_path:
-            if supabase:
-                try:
-                    # Delete from Supabase Storage
-                    supabase.storage.from_(SUPABASE_BUCKET).remove([settings.qr_code_path])
-                    print(f" * DEBUG: Deleted from Supabase: {settings.qr_code_path}")
-                except Exception as e:
-                    print(f" * Error deleting from Supabase: {e}")
-            
-            settings.qr_code_path = ''
-            db.session.commit()
-            flash('QR Code deleted successfully')
-        return redirect(url_for('settings'))
-    except Exception as e:
-        print(f" * Error deleting QR: {e}")
-        flash(f"Error deleting QR: {str(e)}")
-        return redirect(url_for('settings'))
 
 @app.errorhandler(500)
 def handle_500(e):

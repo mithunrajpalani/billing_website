@@ -245,24 +245,19 @@
         </div>
 
         {% if qr_code_base64 %}
-        <div class="qr-payment-section"
+        <div class="bill-image-section"
             style="text-align: center; margin-top: 30px; padding: 20px; border: 2px solid #4CAF50; border-radius: 12px; background-color: #f9fdf9; margin-bottom: 20px; overflow: hidden;">
-            <p style="margin-bottom: 12px; font-size: 16px; font-weight: bold; color: #333;">Scan & Pay Here</p>
+            <p style="margin-bottom: 12px; font-size: 16px; font-weight: bold; color: #333;">Payment QR / Shop Logo</p>
             <div
                 style="background-color: #ffffff; padding: 10px; display: inline-block; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 220px; height: 220px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
-                <img src="{{ qr_code_base64 }}" alt="Payment QR Code" id="qr-code-img"
+                <img src="{{ qr_code_base64 }}" alt="Bill Image" id="bill-image-img"
                     style="max-width: 200px; max-height: 200px; display: block; margin: 0 auto;"
                     crossorigin="anonymous">
             </div>
-            <p style="margin-top: 10px; font-size: 12px; color: #666;">UPI / Bank Transfer Supported</p>
-        </div>
-        {% else %}
-        <div
-            style="text-align: center; margin-top: 20px; color: #999; font-size: 0.8rem; border: 1px dashed #ccc; padding: 10px;">
-            QR Code not available for this bill.
-            <!-- DEBUG INFO: {{ qr_debug_info }} -->
         </div>
         {% endif %}
+
+
 
 
         <div class="footer">
@@ -277,7 +272,7 @@
             const billContainer = document.querySelector('.bill-container');
 
             // Diagnostic logs
-            console.log("Starting capture. Image element exists:", !!document.getElementById('qr-code-img'));
+            console.log("Starting capture. Image element exists:", !!document.getElementById('bill-image-img'));
             console.log("QR Code Base64 begins with:", '{{ qr_code_base64[:40] if qr_code_base64 else "" }}...');
 
             // Ensure images are loaded and wait a bit for rendering
