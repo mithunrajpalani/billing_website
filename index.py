@@ -380,6 +380,31 @@ def generate_bill():
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'Server error: {str(e)}'}), 500
 
+@app.route('/migrate_db')
+def migrate_db():
+    from sqlalchemy import text
+    try:
+        # Check if columns exist and add them if they don't
+        # This is specifically for PostgreSQL on Vercel
+        try:
+            db.session.execute(text('ALTER TABLE bill ADD COLUMN IF NOT EXISTS qr_code_path VARCHAR(255)'))
+            db.session.execute(text('ALTER TABLE bill ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(255)'))
+            db.session.commit()
+            return "Migration successful: Columns added or already existed."
+        except Exception as pg_err:
+            db.session.rollback()
+            # Fallback for SQLite which doesn't support IF NOT EXISTS in ALTER TABLE
+            try:
+                db.session.execute(text('ALTER TABLE bill ADD COLUMN qr_code_path VARCHAR(255)'))
+                db.session.execute(text('ALTER TABLE bill ADD COLUMN pdf_path VARCHAR(255)'))
+                db.session.commit()
+                return "Migration successful (SQLite fallback)."
+            except Exception as e:
+                db.session.rollback()
+                return f"Migration info: {str(e)} (This usually means columns already exist)"
+    except Exception as e:
+        return f"Migration failed: {str(e)}"
+
 @app.route('/view_bill/<bill_number>')
 @login_required
 def view_bill(bill_number):
