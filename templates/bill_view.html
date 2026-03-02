@@ -264,6 +264,7 @@
         </div>
         {% endif %}
 
+
         <div class="footer">
             <p>Thank you for your business!</p>
             <p>This is a computer-generated soft copy of the bill.</p>
@@ -277,7 +278,7 @@
 
             // Diagnostic logs
             console.log("Starting capture. Image element exists:", !!document.getElementById('qr-code-img'));
-            console.log("QR Code Base64 begins with:", '{{ qr_code_base64[:40] }}...');
+            console.log("QR Code Base64 begins with:", '{{ qr_code_base64[:40] if qr_code_base64 else "" }}...');
 
             // Ensure images are loaded and wait a bit for rendering
             const images = billContainer.getElementsByTagName('img');

@@ -27,7 +27,6 @@ class ShopSettings(db.Model):
         if not self.address: self.address = 'Your Shop Address here...'
         if not self.mobile: self.mobile = '9876543210'
         if not self.mobile2: self.mobile2 = ''
-        if not self.qr_code_path: self.qr_code_path = ''
 
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
