@@ -9,6 +9,11 @@ import json
 import base64
 import mimetypes
 from types import SimpleNamespace
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Determine if we are running on Vercel or similar read-only environment
 IS_VERCEL = "VERCEL" in os.environ
@@ -49,6 +54,21 @@ else:
     os.makedirs(os.path.join(basedir, 'instance'), exist_ok=True)
     os.makedirs(upload_folder, exist_ok=True)
 
+# Supabase Configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "billing")
+
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print(f" * Supabase client initialized (Bucket: {SUPABASE_BUCKET})")
+    except Exception as e:
+        print(f" * Error initializing Supabase client: {e}")
+else:
+    print(" * WARNING: Supabase URL or Key missing in environment!")
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -71,11 +91,28 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-@app.route('/uploads/<filename>')
+@app.route('/uploads/<path:filename>')
 def serve_upload(filename):
-    response = make_response(send_from_directory(app.config['UPLOAD_FOLDER'], filename))
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    return response
+    if supabase and (filename.startswith("qr_codes/") or "/" in filename):
+        try:
+            # Proxy from Supabase
+            file_data = supabase.storage.from_(SUPABASE_BUCKET).download(filename)
+            if file_data:
+                mime_type, _ = mimetypes.guess_type(filename)
+                response = make_response(file_data)
+                response.headers['Content-Type'] = mime_type or 'image/png'
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                return response
+        except Exception as e:
+            print(f" * Proxy error for {filename}: {e}")
+            
+    # Fallback to local
+    try:
+        response = make_response(send_from_directory(app.config['UPLOAD_FOLDER'], filename))
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+    except Exception as e:
+        return f"File not found: {filename}", 404
 
 @app.context_processor
 def inject_settings():
@@ -415,20 +452,37 @@ def view_bill(bill_number):
         qr_debug_info = f"QR Path: {qr_path}, Bill Snapshot: {bill.qr_code_path}, Settings QR: {settings_display.qr_code_path}"
         
         if qr_path:
+            print(f" * DEBUG: Attempting to fetch QR from {qr_path}...")
             # Convert image to Base64 server-side to ensure 100% reliable capture by html2canvas
-            full_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_path)
-            if os.path.exists(full_path):
+            if supabase:
                 try:
-                    with open(full_path, "rb") as image_file:
-                        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                        mime_type, _ = mimetypes.guess_type(full_path)
+                    # Download from Supabase Storage
+                    print(f" * DEBUG: Fetching from Supabase Bucket: {SUPABASE_BUCKET} Path: {qr_path}")
+                    response = supabase.storage.from_(SUPABASE_BUCKET).download(qr_path)
+                    if response:
+                        print(f" * DEBUG: Supabase download successful (Size: {len(response)} bytes)")
+                        encoded_string = base64.b64encode(response).decode('utf-8')
+                        mime_type, _ = mimetypes.guess_type(qr_path)
                         if not mime_type:
-                            mime_type = "image/png" # Default fallback
+                            mime_type = "image/png"
                         qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
+                    else:
+                        print(f" * ERROR: Supabase download returned no data for {qr_path}")
                 except Exception as e:
-                    print(f" * ERROR: QR to Base64 failed for {full_path}: {e}")
+                    print(f" * ERROR: Fetching from Supabase failed for {qr_path}: {e}")
             else:
-                print(f" * ERROR: QR file NOT FOUND at {full_path}")
+                print(" * ERROR: Supabase Client not initialized, falling back to local...")
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_path)
+                if os.path.exists(full_path):
+                    try:
+                        with open(full_path, "rb") as image_file:
+                            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                            mime_type, _ = mimetypes.guess_type(full_path)
+                            if not mime_type:
+                                mime_type = "image/png"
+                            qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
+                    except Exception as e:
+                        print(f" * ERROR: Local QR to Base64 failed: {e}")
         
         return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64, qr_debug_info=qr_debug_info)
     except Exception as e:
@@ -510,17 +564,35 @@ def settings():
             settings.mobile = request.form.get('mobile')
             settings.mobile2 = request.form.get('mobile2')
             
-            # Handle QR Code Upload
+            # Handle QR Code Upload - PRODUCTION READY SUPABASE LOGIC
             if 'qr_code' in request.files:
                 file = request.files['qr_code']
                 if file and file.filename != '' and allowed_file(file.filename):
                     filename = secure_filename(file.filename)
                     # Add timestamp to filename to avoid cache issues
                     filename = f"{int(get_now().timestamp())}_{filename}"
-                    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(save_path)
-                    settings.qr_code_path = filename
-                    print(f" * DEBUG: QR Code uploaded and saved to {save_path}")
+                    
+                    if supabase:
+                        try:
+                            # Read file content for Supabase upload
+                            file_content = file.read()
+                            # Reset file pointer if needed else use the content directly
+                            storage_path = f"qr_codes/{filename}"
+                            
+                            # Upload to Supabase Storage
+                            res = supabase.storage.from_(SUPABASE_BUCKET).upload(
+                                path=storage_path,
+                                file=file_content,
+                                file_options={"content-type": mimetypes.guess_type(filename)[0] or "image/png"}
+                            )
+                            
+                            settings.qr_code_path = storage_path
+                            print(f" * DEBUG: QR Code uploaded to Supabase: {storage_path}")
+                        except Exception as e:
+                            print(f" * ERROR: Supabase upload failed: {e}")
+                            flash(f"Error uploading to Supabase: {str(e)}")
+                    else:
+                        flash("Supabase is not configured. QR Code not saved.")
                 elif file and file.filename != '':
                     print(f" * DEBUG: QR Code upload failed - invalid file or extension: {file.filename}")
             
@@ -591,9 +663,14 @@ def delete_qr():
     try:
         settings = ShopSettings.query.first()
         if settings and settings.qr_code_path:
-            # Optionally delete file from disk
-            # file_path = os.path.join(app.config['UPLOAD_FOLDER'], settings.qr_code_path)
-            # if os.path.exists(file_path): os.remove(file_path)
+            if supabase:
+                try:
+                    # Delete from Supabase Storage
+                    supabase.storage.from_(SUPABASE_BUCKET).remove([settings.qr_code_path])
+                    print(f" * DEBUG: Deleted from Supabase: {settings.qr_code_path}")
+                except Exception as e:
+                    print(f" * Error deleting from Supabase: {e}")
+            
             settings.qr_code_path = ''
             db.session.commit()
             flash('QR Code deleted successfully')
