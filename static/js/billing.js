@@ -148,29 +148,42 @@ async function generateBill() {
     const balance = grandTotal - advance - discount;
     const location = document.getElementById('bill-location').value;
     const date = document.getElementById('bill-date').value;
+    const time = document.getElementById('bill-time').value;
 
-    const response = await fetch('/generate_bill', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            items: billItems,
-            grand_total: grandTotal,
-            advance_amount: advance,
-            discount_amount: parseFloat(document.getElementById('bill-discount').value) || 0,
-            balance_amount: balance,
-            location: location,
-            date: date
-        }),
-    });
+    try {
+        const response = await fetch('/generate_bill', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                items: billItems,
+                grand_total: grandTotal,
+                advance_amount: advance,
+                discount_amount: discount,
+                balance_amount: balance,
+                location: location,
+                date: date,
+                time: time
+            }),
+        });
 
-    const result = await response.json();
-    if (result.status === 'success') {
-        document.getElementById('bill-success').classList.remove('hidden');
-        document.getElementById('view-bill-link').href = result.view_url;
-        // Optionally clear bill after success or keep it to show the link
-    } else {
-        alert("Error generating bill. Please try again.");
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Server Error:", errorText);
+            alert("Server Error while generating bill. Check console for details.");
+            return;
+        }
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            document.getElementById('bill-success').classList.remove('hidden');
+            document.getElementById('view-bill-link').href = result.view_url;
+        } else {
+            alert("Error: " + (result.message || "Unknown error occurred"));
+        }
+    } catch (e) {
+        console.error("JS Error:", e);
+        alert("An error occurred in the browser. Check console for details.");
     }
 }

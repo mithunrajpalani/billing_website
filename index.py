@@ -1,11 +1,13 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, session, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from models import db, User, ShopSettings, Item, Bill, BillItem
 from datetime import datetime, timedelta
 import json
+import base64
+import mimetypes
 from types import SimpleNamespace
 
 # Determine if we are running on Vercel or similar read-only environment
@@ -71,7 +73,9 @@ login_manager.login_view = 'login'
 
 @app.route('/uploads/<filename>')
 def serve_upload(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    response = make_response(send_from_directory(app.config['UPLOAD_FOLDER'], filename))
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 @app.context_processor
 def inject_settings():
@@ -93,24 +97,14 @@ def inject_settings():
         if not settings_record:
             try:
                 # If no user settings found, or user not logged in, get the first settings system-wide
+                # We stay with the first record as a system default if user is guest/new
                 settings_record = ShopSettings.query.first()
             except Exception as e:
                 print(f" * Error fetching ShopSettings.query.first(): {e}")
         
-        # FINAL FALLBACK: If current user HAS settings but no QR code, 
-        # try to find ANY settings record with a QR code to show as a global default
-        if settings_record and not getattr(settings_record, 'qr_code_path', None):
-            global_qr_setting = ShopSettings.query.filter(ShopSettings.qr_code_path != '').first()
-            if global_qr_setting:
-                # We borrow the QR code path from another user's setting (likely the admin)
-                settings_obj = settings_record
-                display_qr_path = global_qr_setting.qr_code_path
-            else:
-                settings_obj = settings_record
-                display_qr_path = ''
-        else:
-            settings_obj = settings_record if settings_record else ShopSettings()
-            display_qr_path = getattr(settings_obj, 'qr_code_path', '') or ''
+        # We only use the record's own QR code, no more borrowing from other users
+        settings_obj = settings_record if settings_record else ShopSettings()
+        display_qr_path = getattr(settings_obj, 'qr_code_path', '') or ''
         
         # Helper to get valid settings dictionary
         def get_display_settings(obj, qr_path):
@@ -307,21 +301,39 @@ def generate_bill():
     balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount) or 0)
     custom_location = data.get('location')
     bill_date_str = data.get('date')
+    bill_time_str = data.get('time')
     
     bill_date = get_now()
     if bill_date_str:
         try:
             # Handle dd/mm/yyyy format
             bill_date = datetime.strptime(bill_date_str, '%d/%m/%Y')
-            # Add current time to the selected date
-            now = get_now()
-            bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+            
+            # If time is provided, use it, otherwise use current time
+            if bill_time_str:
+                try:
+                    time_parts = datetime.strptime(bill_time_str, '%H:%M')
+                    bill_date = bill_date.replace(hour=time_parts.hour, minute=time_parts.minute, second=0)
+                except ValueError:
+                    now = get_now()
+                    bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+            else:
+                now = get_now()
+                bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
         except ValueError:
             try:
                 # Fallback to standard ISO format
                 bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
-                now = get_now()
-                bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+                if bill_time_str:
+                    try:
+                        time_parts = datetime.strptime(bill_time_str, '%H:%M')
+                        bill_date = bill_date.replace(hour=time_parts.hour, minute=time_parts.minute, second=0)
+                    except ValueError:
+                        now = get_now()
+                        bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+                else:
+                    now = get_now()
+                    bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
             except ValueError:
                 pass
 
@@ -340,7 +352,8 @@ def generate_bill():
         grand_total=grand_total,
         advance_amount=advance_amount,
         discount_amount=discount_amount,
-        balance_amount=balance_amount
+        balance_amount=balance_amount,
+        qr_code_path=settings.qr_code_path # SNAPSHOT: Save the QR code used for this bill
     )
     db.session.add(new_bill)
     db.session.flush() # Get the bill id
@@ -368,7 +381,27 @@ def view_bill(bill_number):
         # Use centralized settings logic to ensure QR path is always present if it exists in DB
         settings_context = inject_settings()
         settings_display = settings_context['settings']
-        return render_template('bill_view.html', bill=bill, settings=settings_display)
+        
+        # Determine the correct QR path (prioritize bill snapshot)
+        qr_path = bill.qr_code_path if bill.qr_code_path else settings_display.qr_code_path
+        qr_code_base64 = ""
+        print(f" * Viewing bill {bill_number}. QR Path: {qr_path}")
+        
+        if qr_path:
+            # Convert image to Base64 server-side to ensure 100% reliable capture by html2canvas
+            full_path = os.path.join(app.config['UPLOAD_FOLDER'], qr_path)
+            if os.path.exists(full_path):
+                try:
+                    with open(full_path, "rb") as image_file:
+                        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                        mime_type, _ = mimetypes.guess_type(full_path)
+                        if not mime_type:
+                            mime_type = "image/png" # Default fallback
+                        qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
+                except Exception as e:
+                    print(f" * Error converting QR to Base64: {e}")
+        
+        return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64)
     except Exception as e:
         print(f" * Error in view_bill route: {e}")
         return redirect(url_for('index'))

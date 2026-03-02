@@ -11,7 +11,14 @@
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required placeholder="Enter password">
+                <div style="position: relative;">
+                    <input type="password" id="password" name="password" required placeholder="Enter password"
+                        style="padding-right: 45px; width: 100%;">
+                    <button type="button" id="togglePassword"
+                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--accent-color); font-weight: bold; font-size: 0.8rem; padding: 5px;">
+                        VIEW
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
         </form>
@@ -26,4 +33,17 @@
         </p>
     </div>
 </div>
+
+<script>
+    document.getElementById('togglePassword').addEventListener('click', function () {
+        const passwordInput = document.getElementById('password');
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            this.textContent = 'HIDE';
+        } else {
+            passwordInput.type = 'password';
+            this.textContent = 'VIEW';
+        }
+    });
+</script>
 {% endblock %}

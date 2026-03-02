@@ -4,11 +4,16 @@
 <div class="billing-grid">
     <!-- Item Selection Section -->
     <div class="card">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+        <div class="dashboard-header-grid">
             <div>
                 <label for="bill-date"
                     style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Bill Date</label>
                 <input type="text" id="bill-date" value="{{ date.strftime('%d/%m/%Y') }}" placeholder="dd/mm/yyyy">
+            </div>
+            <div>
+                <label for="bill-time"
+                    style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Time</label>
+                <input type="time" id="bill-time" value="{{ date.strftime('%H:%M') }}">
             </div>
             <div>
                 <label for="bill-location"
@@ -19,7 +24,8 @@
         <h2>Select Items</h2>
         <div class="item-selection">
             {% for item in items %}
-            <div class="item-card" onclick="selectItem('{{ item.id }}', '{{ item.name }}', {{ item.price }}, this)">
+            <div class="item-card"
+                onclick="selectItem('{{ item.id }}', '{{ item.name }}', {{ item.price | default(0) }}, this)">
                 <span class="item-name">{{ item.name }}</span>
                 <span class="item-price">₹{{ item.price }}</span>
             </div>

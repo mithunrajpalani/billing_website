@@ -54,6 +54,7 @@ class Bill(db.Model):
     discount_amount = db.Column(db.Float, default=0.0)
     balance_amount = db.Column(db.Float, default=0.0)
     pdf_path = db.Column(db.String(255))
+    qr_code_path = db.Column(db.String(255))  # Snapshot of QR code at time of billing
     items = db.relationship('BillItem', backref='bill', lazy=True, cascade="all, delete-orphan")
 
 class BillItem(db.Model):

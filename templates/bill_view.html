@@ -101,33 +101,47 @@
             }
 
             .bill-container {
-                padding: 20px;
+                padding: 15px;
             }
 
             .header h1 {
-                font-size: 24px;
+                font-size: 22px;
+                margin-bottom: 8px !important;
             }
 
             .header h2 {
                 font-size: 18px;
+                margin: 5px 0 !important;
+            }
+
+            .header p {
+                font-size: 13px;
+                margin: 4px 0 !important;
+                line-height: 1.4;
             }
 
             .bill-info {
                 flex-direction: column;
                 align-items: center;
-                gap: 5px;
+                gap: 8px;
                 text-align: center;
+                margin-top: 15px !important;
+                margin-bottom: 20px !important;
+                border-top: 1px dashed #ddd;
+                border-bottom: 1px dashed #ddd;
+                padding: 10px 0;
             }
 
             th,
             td {
-                padding: 8px 5px;
-                font-size: 13px;
+                padding: 8px 4px;
+                font-size: 12px;
                 text-align: center !important;
             }
 
             .total-section {
                 text-align: center;
+                margin-top: 20px;
             }
         }
 
@@ -150,12 +164,31 @@
 
 <body>
     <div class="no-print"
-        style="text-align: center; display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
+        style="text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 20px;">
         <button class="btn-print" onclick="window.print()">Print Bill</button>
-        <button class="btn-print" style="background-color: #34b7f1;" onclick="downloadBill()">Download Bill</button>
-        <button class="btn-print" style="background-color: #25D366;" onclick="shareOnWhatsApp()">Share on
+        <button id="download-btn" class="btn-print" style="background-color: #34b7f1;" onclick="downloadBill()">Download
+            Bill</button>
+        <button id="share-btn" class="btn-print" style="background-color: #25D366;" onclick="shareOnWhatsApp()">Share on
             WhatsApp</button>
     </div>
+    <div id="loading-overlay"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; color: white; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif;">
+        <div
+            style="border: 4px solid #f3f3f3; border-top: 4px solid #25D366; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin-bottom: 15px;">
+        </div>
+        <p>Generating bill image...</p>
+    </div>
+    <style>
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
 
     <div class="bill-container">
         <div class="header">
@@ -173,7 +206,7 @@
 
         <div class="bill-info">
             <div>
-                <strong>Date:</strong> {{ bill.date.strftime('%d/%m/%Y') }}
+                <strong>Date:</strong> {{ bill.date.strftime('%d/%m/%Y %I:%M %p') }}
             </div>
         </div>
 
@@ -211,14 +244,15 @@
             {% endif %}
         </div>
 
-        {% if settings.qr_code_path %}
+        {% if qr_code_base64 %}
         <div class="qr-payment-section"
-            style="text-align: center; margin-top: 30px; padding: 20px; border: 2px dashed var(--accent-color, #4CAF50); border-radius: 12px; background: rgba(76, 175, 80, 0.05); margin-bottom: 20px;">
+            style="text-align: center; margin-top: 30px; padding: 20px; border: 2px solid #4CAF50; border-radius: 12px; background-color: #f9fdf9; margin-bottom: 20px; overflow: hidden;">
             <p style="margin-bottom: 12px; font-size: 16px; font-weight: bold; color: #333;">Scan & Pay Here</p>
             <div
-                style="background: white; padding: 10px; display: inline-block; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                <img src="{{ url_for('serve_upload', filename=settings.qr_code_path) }}" alt="Payment QR Code"
-                    style="max-width: 200px; height: auto; display: block; margin: 0 auto;">
+                style="background-color: #ffffff; padding: 10px; display: inline-block; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 220px; height: 220px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+                <img src="{{ qr_code_base64 }}" alt="Payment QR Code" id="qr-code-img"
+                    style="max-width: 200px; max-height: 200px; display: block; margin: 0 auto;"
+                    crossorigin="anonymous">
             </div>
             <p style="margin-top: 10px; font-size: 12px; color: #666;">UPI / Bank Transfer Supported</p>
         </div>
@@ -230,27 +264,48 @@
         </div>
     </div>
 
-    <!-- html2canvas for image sharing -->
     <script src="{{ url_for('static', filename='js/html2canvas.min.js') }}"></script>
     <script>
         async function shareOnWhatsApp() {
             const billContainer = document.querySelector('.bill-container');
 
-            // Show loading state or feedback if needed (optional)
+            // Diagnostic logs
+            console.log("Starting capture. Image element exists:", !!document.getElementById('qr-code-img'));
+            console.log("QR Code Base64 begins with:", '{{ qr_code_base64[:40] }}...');
+
+            // Ensure images are loaded and wait a bit for rendering
+            const images = billContainer.getElementsByTagName('img');
+            console.log("Found", images.length, "images to load.");
+            const imagePromises = Array.from(images).map(img => {
+                if (img.complete && img.naturalHeight !== 0) {
+                    console.log("Image", img.id, "already loaded.");
+                    return Promise.resolve();
+                }
+                return new Promise(resolve => {
+                    img.onload = () => { console.log("Image", img.id, "loaded successfully."); resolve(); };
+                    img.onerror = () => { console.error("Image", img.id, "failed to load."); resolve(); };
+                });
+            });
+
+            await Promise.all(imagePromises);
+            await new Promise(resolve => setTimeout(resolve, 800)); // Increased buffer
+            console.log("Images loaded and buffer waited.");
 
             try {
                 const canvas = await html2canvas(billContainer, {
                     scale: 2,
                     backgroundColor: "#ffffff",
-                    logging: false,
-                    useCORS: true
+                    logging: true, // Enable html2canvas internal logs
+                    useCORS: true,
+                    allowTaint: true,
+                    removeContainer: true
                 });
+                console.log("Canvas created successfully.");
 
                 canvas.toBlob(async (blob) => {
                     const file = new File([blob], `bill-{{ bill.id }}.png`, { type: 'image/png' });
 
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        // Native sharing (works on Mobile for WhatsApp)
                         try {
                             await navigator.share({
                                 files: [file],
@@ -265,7 +320,6 @@
                             }
                         }
                     } else {
-                        // Fallback for Desktop or unsupported browsers
                         alert("Direct image sharing is not supported on this device/browser. The bill image will be downloaded, and you can attach it to WhatsApp manually.");
                         downloadImage(canvas);
                         window.open('https://wa.me/', '_blank');
@@ -288,11 +342,24 @@
 
         async function downloadBill() {
             const billContainer = document.querySelector('.bill-container');
+
+            // Ensure images are loaded
+            const images = billContainer.getElementsByTagName('img');
+            const imagePromises = Array.from(images).map(img => {
+                if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+                return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+            });
+
+            await Promise.all(imagePromises);
+            await new Promise(resolve => setTimeout(resolve, 800));
+
             const canvas = await html2canvas(billContainer, {
                 scale: 2,
                 backgroundColor: "#ffffff",
-                logging: false,
-                useCORS: true
+                logging: true,
+                useCORS: true,
+                allowTaint: true,
+                removeContainer: true
             });
             downloadImage(canvas);
         }
