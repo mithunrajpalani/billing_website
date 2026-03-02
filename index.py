@@ -4,7 +4,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from models import db, User, ShopSettings, Item, Bill, BillItem
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import base64
 import mimetypes
@@ -18,10 +18,10 @@ load_dotenv()
 # Determine if we are running on Vercel or similar read-only environment
 IS_VERCEL = "VERCEL" in os.environ
 
+
 def get_now():
     """Get current time in IST (UTC+5:30)"""
-    # Vercel servers use UTC, so we add 5.5 hours for IST
-    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=5, minutes=30)
 
 if IS_VERCEL:
     # On Vercel, the only writable directory is /tmp
@@ -64,15 +64,17 @@ print(f" * DEBUG: SUPABASE_URL: {SUPABASE_URL[:15] if SUPABASE_URL else 'None'}.
 print(f" * DEBUG: SUPABASE_KEY: {SUPABASE_KEY[:15] if SUPABASE_KEY else 'None'}...")
 print(f" * DEBUG: SUPABASE_BUCKET: {SUPABASE_BUCKET}")
 
-supabase: Client = None
-if SUPABASE_URL and SUPABASE_KEY:
-    try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f" * Supabase client initialized (Bucket: {SUPABASE_BUCKET})")
-    except Exception as e:
-        print(f" * Error initializing Supabase client: {e}")
-else:
-    print(" * WARNING: Supabase URL or Key missing in environment!")
+_supabase_client = None
+def get_supabase():
+    global _supabase_client
+    if _supabase_client is None:
+        if SUPABASE_URL and SUPABASE_KEY:
+            try:
+                _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+                print(f" * Supabase client initialized (Bucket: {SUPABASE_BUCKET})")
+            except Exception as e:
+                print(f" * Error initializing Supabase client: {e}")
+    return _supabase_client
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
@@ -119,23 +121,22 @@ def serve_upload(filename):
     except Exception as e:
         return f"File not found: {filename}", 404
 
+_cached_settings = None
+_cached_footer_base64 = None
+
 @app.context_processor
 def inject_settings():
+    global _cached_settings
     db_uri_config = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-    if 'postgresql' in db_uri_config:
-        db_type = 'Persistent (PostgreSQL)'
-    else:
-        db_type = 'Persistent (Local SQLite)'
+    db_type = 'Persistent (PostgreSQL)' if 'postgresql' in db_uri_config else 'Persistent (Local SQLite)'
+    
+    if _cached_settings:
+        return dict(settings=_cached_settings, db_type=db_type)
     
     try:
-        # ALWAYS use the first settings record as the global shop settings
         settings_record = ShopSettings.query.first()
-        
-        # If no settings exist yet, create a default one
         if not settings_record:
-            print(" * inject_settings: No settings found, creating default...")
             settings_record = ShopSettings()
-            # If we have an admin user, link it to them, otherwise leave it for now
             admin = User.query.filter_by(username='admin').first()
             if admin:
                 settings_record.user_id = admin.id
@@ -144,7 +145,6 @@ def inject_settings():
         
         display_qr_path = getattr(settings_record, 'qr_code_path', '') or ''
         
-        # Helper to get valid settings dictionary
         def get_display_settings(obj, qr_path):
             return {
                 'shop_name': getattr(obj, 'shop_name', 'Sri Krishna Bakery') or 'Sri Krishna Bakery',
@@ -156,23 +156,17 @@ def inject_settings():
             }
             
         settings_data = get_display_settings(settings_record, display_qr_path)
-        return dict(settings=SimpleNamespace(**settings_data), db_type=db_type, get_display_settings=get_display_settings)
+        _cached_settings = SimpleNamespace(**settings_data)
+        return dict(settings=_cached_settings, db_type=db_type)
     except Exception as e:
-        print(f" * Critical error in inject_settings: {e}")
-        fallback = {
-            'shop_name': 'Sri Krishna Bakery', 
-            'company_name': 'ICEBERG',
-            'address': 'Your Shop Address here...',
-            'mobile': '9876543210',
-            'mobile2': '',
-            'qr_code_path': ''
-        }
-        return dict(settings=SimpleNamespace(**fallback), db_type=db_type)
+        print(f" * Error in inject_settings: {e}")
+        fallback = SimpleNamespace(shop_name='Sri Krishna Bakery', company_name='ICEBERG', address='Your Shop Address here...', mobile='9876543210', mobile2='', qr_code_path='')
+        return dict(settings=fallback, db_type=db_type)
 
 @login_manager.user_loader
 def load_user(user_id):
     try:
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))
     except:
         return None
 
@@ -452,23 +446,23 @@ def view_bill(bill_number):
         settings_display = settings_context['settings']
         
         # NEW REQUIREMENT: Load fixed image from local folder 'static/images/bill_footer'
-        qr_code_base64 = ""
-        footer_dir = os.path.join(app.root_path, 'static', 'images', 'bill_footer')
+        global _cached_footer_base64
+        qr_code_base64 = _cached_footer_base64 or ""
         
-        if os.path.exists(footer_dir):
-            # Find the first image file in the folder
-            image_files = [f for f in os.listdir(footer_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
-            if image_files:
-                footer_img_path = os.path.join(footer_dir, image_files[0])
-                try:
-                    print(f" * DEBUG: Loading footer image from {footer_img_path}")
-                    with open(footer_img_path, "rb") as img_file:
-                        encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
-                        mime_type, _ = mimetypes.guess_type(footer_img_path)
-                        if not mime_type: mime_type = "image/png"
-                        qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
-                except Exception as e:
-                    print(f" * ERROR: Local footer image loading failed: {e}")
+        if not _cached_footer_base64:
+            footer_dir = os.path.join(app.root_path, 'static', 'images', 'bill_footer')
+            if os.path.exists(footer_dir):
+                image_files = [f for f in os.listdir(footer_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp'))]
+                if image_files:
+                    footer_img_path = os.path.join(footer_dir, image_files[0])
+                    try:
+                        with open(footer_img_path, "rb") as img_file:
+                            encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
+                            mime_type, _ = mimetypes.guess_type(footer_img_path)
+                            _cached_footer_base64 = f"data:{mime_type or 'image/png'};base64,{encoded_string}"
+                            qr_code_base64 = _cached_footer_base64
+                    except Exception as e:
+                        print(f" * ERROR: Footer image loading failed: {e}")
         
         return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64)
     except Exception as e:
@@ -600,6 +594,11 @@ def settings():
             try:
                 db.session.commit()
                 db.session.refresh(settings) # Refresh to get latest state
+                
+                # Invalidate cache so changes reflect on next request
+                global _cached_settings
+                _cached_settings = None
+                
                 flash('Settings updated successfully')
             except Exception as e:
                 db.session.rollback()
