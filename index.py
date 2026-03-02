@@ -83,28 +83,24 @@ def inject_settings():
     if 'postgresql' in db_uri_config:
         db_type = 'Persistent (PostgreSQL)'
     else:
-        # Default to Persistent for local SQLite as requested
         db_type = 'Persistent (Local SQLite)'
     
     try:
-        settings_record = None
-        if current_user.is_authenticated:
-            try:
-                settings_record = current_user.settings
-            except Exception as e:
-                print(f" * Error fetching current_user.settings: {e}")
+        # ALWAYS use the first settings record as the global shop settings
+        settings_record = ShopSettings.query.first()
         
+        # If no settings exist yet, create a default one
         if not settings_record:
-            try:
-                # If no user settings found, or user not logged in, get the first settings system-wide
-                # We stay with the first record as a system default if user is guest/new
-                settings_record = ShopSettings.query.first()
-            except Exception as e:
-                print(f" * Error fetching ShopSettings.query.first(): {e}")
+            print(" * inject_settings: No settings found, creating default...")
+            settings_record = ShopSettings()
+            # If we have an admin user, link it to them, otherwise leave it for now
+            admin = User.query.filter_by(username='admin').first()
+            if admin:
+                settings_record.user_id = admin.id
+                db.session.add(settings_record)
+                db.session.commit()
         
-        # We only use the record's own QR code, no more borrowing from other users
-        settings_obj = settings_record if settings_record else ShopSettings()
-        display_qr_path = getattr(settings_obj, 'qr_code_path', '') or ''
+        display_qr_path = getattr(settings_record, 'qr_code_path', '') or ''
         
         # Helper to get valid settings dictionary
         def get_display_settings(obj, qr_path):
@@ -117,7 +113,7 @@ def inject_settings():
                 'qr_code_path': qr_path
             }
             
-        settings_data = get_display_settings(settings_obj, display_qr_path)
+        settings_data = get_display_settings(settings_record, display_qr_path)
         return dict(settings=SimpleNamespace(**settings_data), db_type=db_type, get_display_settings=get_display_settings)
     except Exception as e:
         print(f" * Critical error in inject_settings: {e}")
@@ -273,12 +269,7 @@ def signup():
         new_user = User(username=username, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
-
-        # Create default settings for new user
-        new_settings = ShopSettings(user_id=new_user.id)
-        db.session.add(new_settings)
-        db.session.commit()
-
+        # No need to create separate settings for each user as we use global settings
         flash('Account created successfully! Please login.')
         return redirect(url_for('login'))
 
@@ -338,23 +329,27 @@ def generate_bill():
                 except ValueError:
                     pass
 
-        settings = current_user.settings or ShopSettings()
+        # Use global settings
+        settings_record = ShopSettings.query.first()
+        if not settings_record:
+            settings_record = ShopSettings()
+            
         bill_number = f"BILL-{get_now().strftime('%Y%m%d%H%M%S')}"
         
         new_bill = Bill(
             bill_number=bill_number,
             date=bill_date,
-            company_name=settings.company_name,
-            shop_name=settings.shop_name,
+            company_name=settings_record.company_name,
+            shop_name=settings_record.shop_name,
             location=custom_location if custom_location else '',
-            shop_address=settings.address,
-            shop_mobile=settings.mobile,
-            shop_mobile2=settings.mobile2,
+            shop_address=settings_record.address,
+            shop_mobile=settings_record.mobile,
+            shop_mobile2=settings_record.mobile2,
             grand_total=grand_total,
             advance_amount=advance_amount,
             discount_amount=discount_amount,
             balance_amount=balance_amount,
-            qr_code_path=settings.qr_code_path # SNAPSHOT: Save the QR code used for this bill
+            qr_code_path=settings_record.qr_code_path # SNAPSHOT: Save the QR code used for this bill
         )
         db.session.add(new_bill)
         db.session.flush() # Get the bill id
@@ -506,8 +501,10 @@ def delete_item(item_id):
 @login_required
 def settings():
     try:
-        settings = current_user.settings
+        # Use a single global settings record
+        settings = ShopSettings.query.first()
         if not settings:
+            print(" * settings route: No settings found, creating default...")
             settings = ShopSettings(user_id=current_user.id)
             db.session.add(settings)
             db.session.commit()
@@ -594,6 +591,24 @@ def settings():
     except Exception as e:
         print(f" * Error in settings route: {e}")
         return redirect(url_for('index'))
+
+@app.route('/delete_qr', methods=['POST'])
+@login_required
+def delete_qr():
+    try:
+        settings = ShopSettings.query.first()
+        if settings and settings.qr_code_path:
+            # Optionally delete file from disk
+            # file_path = os.path.join(app.config['UPLOAD_FOLDER'], settings.qr_code_path)
+            # if os.path.exists(file_path): os.remove(file_path)
+            settings.qr_code_path = ''
+            db.session.commit()
+            flash('QR Code deleted successfully')
+        return redirect(url_for('settings'))
+    except Exception as e:
+        print(f" * Error deleting QR: {e}")
+        flash(f"Error deleting QR: {str(e)}")
+        return redirect(url_for('settings'))
 
 @app.errorhandler(500)
 def handle_500(e):

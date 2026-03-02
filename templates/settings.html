@@ -20,6 +20,13 @@
                         CURRENTLY ACTIVE QR</p>
                     <img src="{{ url_for('serve_upload', filename=settings.qr_code_path) }}" alt="QR Code"
                         style="height: 80px; width: auto; border-radius: 4px; border: 1px solid #eee;">
+                    <form action="{{ url_for('delete_qr') }}" method="POST" style="margin-top: 5px;">
+                        <button type="submit" class="btn"
+                            style="font-size: 0.65rem; padding: 4px 8px; background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 4px; cursor: pointer; width: 100%;"
+                            onclick="return confirm('Are you sure you want to delete the QR code?')">
+                            Delete QR
+                        </button>
+                    </form>
                     <p style="font-size: 0.6rem; color: #2ecc71; margin-top: 4px;">✓ Saved</p>
                 </div>
                 {% else %}
