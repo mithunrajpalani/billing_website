@@ -59,6 +59,11 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "billing")
 
+# DEBUG: Print environment status (obfuscated)
+print(f" * DEBUG: SUPABASE_URL: {SUPABASE_URL[:15] if SUPABASE_URL else 'None'}...")
+print(f" * DEBUG: SUPABASE_KEY: {SUPABASE_KEY[:15] if SUPABASE_KEY else 'None'}...")
+print(f" * DEBUG: SUPABASE_BUCKET: {SUPABASE_BUCKET}")
+
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     try:
