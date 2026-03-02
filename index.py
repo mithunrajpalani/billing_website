@@ -417,7 +417,8 @@ def view_bill(bill_number):
         # Determine the correct QR path (prioritize bill snapshot)
         qr_path = bill.qr_code_path if bill.qr_code_path else settings_display.qr_code_path
         qr_code_base64 = ""
-        print(f" * Viewing bill {bill_number}. QR Path: {qr_path}")
+        qr_debug_info = f"QR Path: {qr_path}, Bill Snapshot: {bill.qr_code_path}, Settings QR: {settings_display.qr_code_path}"
+        print(f" * DEBUG: {qr_debug_info}")
         
         if qr_path:
             # Convert image to Base64 server-side to ensure 100% reliable capture by html2canvas
@@ -430,10 +431,18 @@ def view_bill(bill_number):
                         if not mime_type:
                             mime_type = "image/png" # Default fallback
                         qr_code_base64 = f"data:{mime_type};base64,{encoded_string}"
+                        print(f" * DEBUG: Generated Base64 for {qr_path} ({len(qr_code_base64)} chars)")
                 except Exception as e:
-                    print(f" * Error converting QR to Base64: {e}")
+                    print(f" * ERROR: QR to Base64 failed for {full_path}: {e}")
+                    qr_debug_info += f" | Error: {str(e)}"
+            else:
+                print(f" * ERROR: QR file NOT FOUND at {full_path}")
+                qr_debug_info += f" | File NOT FOUND at {full_path}"
+        else:
+            print(" * DEBUG: No QR path found in Bill or Settings")
+            qr_debug_info += " | No QR path found"
         
-        return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64)
+        return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64, qr_debug_info=qr_debug_info)
     except Exception as e:
         print(f" * Error in view_bill route: {e}")
         return redirect(url_for('index'))
@@ -518,8 +527,12 @@ def settings():
                     filename = secure_filename(file.filename)
                     # Add timestamp to filename to avoid cache issues
                     filename = f"{int(get_now().timestamp())}_{filename}"
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(save_path)
                     settings.qr_code_path = filename
+                    print(f" * DEBUG: QR Code uploaded and saved to {save_path}")
+                elif file and file.filename != '':
+                    print(f" * DEBUG: QR Code upload failed - invalid file or extension: {file.filename}")
             
             # Add new item if provided
             new_item_name = request.form.get('new_item_name')
