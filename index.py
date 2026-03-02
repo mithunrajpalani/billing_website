@@ -293,37 +293,24 @@ def logout():
 @app.route('/generate_bill', methods=['POST'])
 @login_required
 def generate_bill():
-    data = request.json
-    bill_data = data.get('items', [])
-    grand_total = float(data.get('grand_total', 0) or 0)
-    advance_amount = float(data.get('advance_amount', 0) or 0)
-    discount_amount = float(data.get('discount_amount', 0) or 0)
-    balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount) or 0)
-    custom_location = data.get('location')
-    bill_date_str = data.get('date')
-    bill_time_str = data.get('time')
-    
-    bill_date = get_now()
-    if bill_date_str:
-        try:
-            # Handle dd/mm/yyyy format
-            bill_date = datetime.strptime(bill_date_str, '%d/%m/%Y')
-            
-            # If time is provided, use it, otherwise use current time
-            if bill_time_str:
-                try:
-                    time_parts = datetime.strptime(bill_time_str, '%H:%M')
-                    bill_date = bill_date.replace(hour=time_parts.hour, minute=time_parts.minute, second=0)
-                except ValueError:
-                    now = get_now()
-                    bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
-            else:
-                now = get_now()
-                bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
-        except ValueError:
+    try:
+        data = request.json
+        bill_data = data.get('items', [])
+        grand_total = float(data.get('grand_total', 0) or 0)
+        advance_amount = float(data.get('advance_amount', 0) or 0)
+        discount_amount = float(data.get('discount_amount', 0) or 0)
+        balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount) or 0)
+        custom_location = data.get('location')
+        bill_date_str = data.get('date')
+        bill_time_str = data.get('time')
+        
+        bill_date = get_now()
+        if bill_date_str:
             try:
-                # Fallback to standard ISO format
-                bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
+                # Handle dd/mm/yyyy format
+                bill_date = datetime.strptime(bill_date_str, '%d/%m/%Y')
+                
+                # If time is provided, use it, otherwise use current time
                 if bill_time_str:
                     try:
                         time_parts = datetime.strptime(bill_time_str, '%H:%M')
@@ -335,43 +322,63 @@ def generate_bill():
                     now = get_now()
                     bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
             except ValueError:
-                pass
+                try:
+                    # Fallback to standard ISO format
+                    bill_date = datetime.strptime(bill_date_str, '%Y-%m-%d')
+                    if bill_time_str:
+                        try:
+                            time_parts = datetime.strptime(bill_time_str, '%H:%M')
+                            bill_date = bill_date.replace(hour=time_parts.hour, minute=time_parts.minute, second=0)
+                        except ValueError:
+                            now = get_now()
+                            bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+                    else:
+                        now = get_now()
+                        bill_date = bill_date.replace(hour=now.hour, minute=now.minute, second=now.second)
+                except ValueError:
+                    pass
 
-    settings = current_user.settings or ShopSettings()
-    bill_number = f"BILL-{get_now().strftime('%Y%m%d%H%M%S')}"
-    
-    new_bill = Bill(
-        bill_number=bill_number,
-        date=bill_date,
-        company_name=settings.company_name,
-        shop_name=settings.shop_name,
-        location=custom_location if custom_location else '',
-        shop_address=settings.address,
-        shop_mobile=settings.mobile,
-        shop_mobile2=settings.mobile2,
-        grand_total=grand_total,
-        advance_amount=advance_amount,
-        discount_amount=discount_amount,
-        balance_amount=balance_amount,
-        qr_code_path=settings.qr_code_path # SNAPSHOT: Save the QR code used for this bill
-    )
-    db.session.add(new_bill)
-    db.session.flush() # Get the bill id
-    
-    for item in bill_data:
-        bill_item = BillItem(
-            bill_id=new_bill.id,
-            item_name=item['name'],
-            quantity=item['quantity'],
-            unit_price=item['price'],
-            total_price=item['total']
+        settings = current_user.settings or ShopSettings()
+        bill_number = f"BILL-{get_now().strftime('%Y%m%d%H%M%S')}"
+        
+        new_bill = Bill(
+            bill_number=bill_number,
+            date=bill_date,
+            company_name=settings.company_name,
+            shop_name=settings.shop_name,
+            location=custom_location if custom_location else '',
+            shop_address=settings.address,
+            shop_mobile=settings.mobile,
+            shop_mobile2=settings.mobile2,
+            grand_total=grand_total,
+            advance_amount=advance_amount,
+            discount_amount=discount_amount,
+            balance_amount=balance_amount,
+            qr_code_path=settings.qr_code_path # SNAPSHOT: Save the QR code used for this bill
         )
-        db.session.add(bill_item)
-    
-    # Save session to get IDs for PDF generation
-    db.session.commit()
-    
-    return jsonify({'status': 'success', 'bill_number': bill_number, 'view_url': url_for('view_bill', bill_number=bill_number)})
+        db.session.add(new_bill)
+        db.session.flush() # Get the bill id
+        
+        for item in bill_data:
+            bill_item = BillItem(
+                bill_id=new_bill.id,
+                item_name=item['name'],
+                quantity=item['quantity'],
+                unit_price=item['price'],
+                total_price=item['total']
+            )
+            db.session.add(bill_item)
+        
+        # Save session to get IDs for PDF generation
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'bill_number': bill_number, 'view_url': url_for('view_bill', bill_number=bill_number)})
+    except Exception as e:
+        db.session.rollback()
+        print(f" * ERROR in generate_bill: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Server error: {str(e)}'}), 500
 
 @app.route('/view_bill/<bill_number>')
 @login_required

@@ -169,9 +169,15 @@ async function generateBill() {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Server Error:", errorText);
-            alert("Server Error while generating bill. Check console for details.");
+            let errorMsg = "Server Error while generating bill.";
+            try {
+                const data = await response.json();
+                if (data.message) errorMsg = data.message;
+            } catch (e) {
+                console.error("Error parsing error response:", e);
+            }
+            console.error("Server Error Detail:", errorMsg);
+            alert(errorMsg + "\n\nCheck console or Vercel logs for more details.");
             return;
         }
 
