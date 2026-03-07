@@ -249,16 +249,12 @@ def index():
         drink_items = Item.query.filter_by(category='Welcome Drinks', is_flavor=True).all()
         beeda_items = Item.query.filter_by(category='Beeda', is_flavor=True).all()
         
-        settings_context = inject_settings()
-        settings_display = settings_context['settings']
-        
         return render_template('dashboard.html', 
                               items=items, 
                               flavors=ice_cream_flavors, 
                               fruit_items=fruit_items,
                               drink_items=drink_items,
                               beeda_items=beeda_items,
-                              settings=settings_display, 
                               date=get_now())
     except Exception as e:
         print(f" * Error in index route: {e}")
@@ -441,13 +437,9 @@ def migrate_db():
 def view_bill(bill_number):
     try:
         bill = Bill.query.filter_by(bill_number=bill_number).first_or_404()
-        # Use centralized settings logic to ensure QR path is always present if it exists in DB
-        settings_context = inject_settings()
-        settings_display = settings_context['settings']
         
         # NEW REQUIREMENT: Load fixed image from local folder 'static/images/bill_footer'
         global _cached_footer_base64
-        qr_code_base64 = _cached_footer_base64 or ""
         
         if not _cached_footer_base64:
             footer_dir = os.path.join(app.root_path, 'static', 'images', 'bill_footer')
@@ -460,11 +452,10 @@ def view_bill(bill_number):
                             encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
                             mime_type, _ = mimetypes.guess_type(footer_img_path)
                             _cached_footer_base64 = f"data:{mime_type or 'image/png'};base64,{encoded_string}"
-                            qr_code_base64 = _cached_footer_base64
                     except Exception as e:
                         print(f" * ERROR: Footer image loading failed: {e}")
         
-        return render_template('bill_view.html', bill=bill, settings=settings_display, qr_code_base64=qr_code_base64)
+        return render_template('bill_view.html', bill=bill, qr_code_base64=_cached_footer_base64 or "")
     except Exception as e:
         print(f" * Error in view_bill route: {e}")
         return redirect(url_for('index'))
