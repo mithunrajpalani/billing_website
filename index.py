@@ -413,28 +413,43 @@ def generate_bill():
 def migrate_db():
     from sqlalchemy import text
     try:
-        columns_to_add = [
+        # 1. Add columns to 'bill' table
+        bill_columns = [
             ('party_number', 'VARCHAR(50)'),
             ('qr_code_path', 'VARCHAR(255)'),
             ('pdf_path', 'VARCHAR(255)')
         ]
         
         results = []
-        for col_name, col_type in columns_to_add:
+        for col_name, col_type in bill_columns:
             try:
-                # Direct attempt (Standard SQL / SQLite)
                 db.session.execute(text(f'ALTER TABLE bill ADD COLUMN {col_name} {col_type}'))
                 db.session.commit()
-                results.append(f"Added {col_name}")
+                results.append(f"Added {col_name} to bill")
             except Exception as e:
                 db.session.rollback()
-                # If it fails, check if it's because it already exists
                 if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                    results.append(f"{col_name} already exists")
+                    results.append(f"bill.{col_name} already exists")
                 else:
-                    results.append(f"Failed to add {col_name}: {str(e)}")
+                    results.append(f"Failed to add bill.{col_name}: {str(e)}")
+
+        # 2. Add columns to 'shop_settings' table
+        settings_columns = [
+            ('qr_code_path', 'VARCHAR(255)')
+        ]
+        for col_name, col_type in settings_columns:
+            try:
+                db.session.execute(text(f'ALTER TABLE shop_settings ADD COLUMN {col_name} {col_type}'))
+                db.session.commit()
+                results.append(f"Added {col_name} to shop_settings")
+            except Exception as e:
+                db.session.rollback()
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    results.append(f"shop_settings.{col_name} already exists")
+                else:
+                    results.append(f"Failed to add shop_settings.{col_name}: {str(e)}")
         
-        # 2. Data Migration: Update ICEBERG to ice Berg
+        # 3. Data Migration: Update ICEBERG to ice Berg
         try:
             db.session.execute(text("UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = 'ICEBERG'"))
             db.session.execute(text("UPDATE bill SET company_name = 'ice Berg' WHERE company_name = 'ICEBERG'"))
