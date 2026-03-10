@@ -13,7 +13,7 @@ class User(UserMixin, db.Model):
 class ShopSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    company_name = db.Column(db.String(150), default='ICEBERG', server_default='ICEBERG')
+    company_name = db.Column(db.String(150), default='ice Berg', server_default='ice Berg')
     shop_name = db.Column(db.String(150), default='Sri Krishna Bakery', server_default='Sri Krishna Bakery')
     address = db.Column(db.String(300), default='Your Shop Address here...', server_default='Your Shop Address here...')
     mobile = db.Column(db.String(20), default='9876543210', server_default='9876543210')
@@ -22,7 +22,7 @@ class ShopSettings(db.Model):
 
     def __init__(self, **kwargs):
         super(ShopSettings, self).__init__(**kwargs)
-        if not self.company_name: self.company_name = 'ICEBERG'
+        if not self.company_name: self.company_name = 'ice Berg'
         if not self.shop_name: self.shop_name = 'Sri Krishna Bakery'
         if not self.address: self.address = 'Your Shop Address here...'
         if not self.mobile: self.mobile = '9876543210'
@@ -52,6 +52,7 @@ class Bill(db.Model):
     advance_amount = db.Column(db.Float, default=0.0)
     discount_amount = db.Column(db.Float, default=0.0)
     balance_amount = db.Column(db.Float, default=0.0)
+    party_number = db.Column(db.String(50))
     pdf_path = db.Column(db.String(255))
     qr_code_path = db.Column(db.String(255))  # Snapshot of QR code at time of billing
     items = db.relationship('BillItem', backref='bill', lazy=True, cascade="all, delete-orphan")

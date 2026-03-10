@@ -162,6 +162,7 @@ async function generateBill() {
                 advance_amount: advance,
                 discount_amount: discount,
                 balance_amount: balance,
+                party_number: document.getElementById('bill-party-number').value,
                 location: location,
                 date: date,
                 time: time

@@ -148,7 +148,7 @@ def inject_settings():
         def get_display_settings(obj, qr_path):
             return {
                 'shop_name': getattr(obj, 'shop_name', 'Sri Krishna Bakery') or 'Sri Krishna Bakery',
-                'company_name': getattr(obj, 'company_name', 'ICEBERG') or 'ICEBERG',
+                'company_name': getattr(obj, 'company_name', 'ice Berg') or 'ice Berg',
                 'address': getattr(obj, 'address', 'Your Shop Address here...') or 'Your Shop Address here...',
                 'mobile': getattr(obj, 'mobile', '9876543210') or '9876543210',
                 'mobile2': getattr(obj, 'mobile2', '') or '',
@@ -160,7 +160,7 @@ def inject_settings():
         return dict(settings=_cached_settings, db_type=db_type)
     except Exception as e:
         print(f" * Error in inject_settings: {e}")
-        fallback = SimpleNamespace(shop_name='Sri Krishna Bakery', company_name='ICEBERG', address='Your Shop Address here...', mobile='9876543210', mobile2='', qr_code_path='')
+        fallback = SimpleNamespace(shop_name='Sri Krishna Bakery', company_name='ice Berg', address='Your Shop Address here...', mobile='9876543210', mobile2='', qr_code_path='')
         return dict(settings=fallback, db_type=db_type)
 
 @login_manager.user_loader
@@ -323,6 +323,7 @@ def generate_bill():
         advance_amount = float(data.get('advance_amount', 0) or 0)
         discount_amount = float(data.get('discount_amount', 0) or 0)
         balance_amount = float(data.get('balance_amount', grand_total - advance_amount - discount_amount) or 0)
+        party_number = data.get('party_number', '')
         custom_location = data.get('location')
         bill_date_str = data.get('date')
         bill_time_str = data.get('time')
@@ -381,6 +382,7 @@ def generate_bill():
             advance_amount=advance_amount,
             discount_amount=discount_amount,
             balance_amount=balance_amount,
+            party_number=party_number,
             qr_code_path=settings_record.qr_code_path # SNAPSHOT: Save the QR code used for this bill
         )
         db.session.add(new_bill)
@@ -411,26 +413,40 @@ def generate_bill():
 def migrate_db():
     from sqlalchemy import text
     try:
-        # Check if columns exist and add them if they don't
-        # This is specifically for PostgreSQL on Vercel
-        try:
-            db.session.execute(text('ALTER TABLE bill ADD COLUMN IF NOT EXISTS qr_code_path VARCHAR(255)'))
-            db.session.execute(text('ALTER TABLE bill ADD COLUMN IF NOT EXISTS pdf_path VARCHAR(255)'))
-            db.session.commit()
-            return "Migration successful: Columns added or already existed."
-        except Exception as pg_err:
-            db.session.rollback()
-            # Fallback for SQLite which doesn't support IF NOT EXISTS in ALTER TABLE
+        columns_to_add = [
+            ('party_number', 'VARCHAR(50)'),
+            ('qr_code_path', 'VARCHAR(255)'),
+            ('pdf_path', 'VARCHAR(255)')
+        ]
+        
+        results = []
+        for col_name, col_type in columns_to_add:
             try:
-                db.session.execute(text('ALTER TABLE bill ADD COLUMN qr_code_path VARCHAR(255)'))
-                db.session.execute(text('ALTER TABLE bill ADD COLUMN pdf_path VARCHAR(255)'))
+                # Direct attempt (Standard SQL / SQLite)
+                db.session.execute(text(f'ALTER TABLE bill ADD COLUMN {col_name} {col_type}'))
                 db.session.commit()
-                return "Migration successful (SQLite fallback)."
+                results.append(f"Added {col_name}")
             except Exception as e:
                 db.session.rollback()
-                return f"Migration info: {str(e)} (This usually means columns already exist)"
+                # If it fails, check if it's because it already exists
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    results.append(f"{col_name} already exists")
+                else:
+                    results.append(f"Failed to add {col_name}: {str(e)}")
+        
+        # 2. Data Migration: Update ICEBERG to ice Berg
+        try:
+            db.session.execute(text("UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = 'ICEBERG'"))
+            db.session.execute(text("UPDATE bill SET company_name = 'ice Berg' WHERE company_name = 'ICEBERG'"))
+            db.session.commit()
+            results.append("Updated 'ICEBERG' to 'ice Berg' in settings and bills")
+        except Exception as e:
+            db.session.rollback()
+            results.append(f"Failed to update branding data: {str(e)}")
+        
+        return f"Migration results: <br> - " + "<br> - ".join(results)
     except Exception as e:
-        return f"Migration failed: {str(e)}"
+        return f"Migration failed check: {str(e)}"
 
 @app.route('/view_bill/<bill_number>')
 @login_required
