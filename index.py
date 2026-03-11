@@ -449,12 +449,17 @@ def migrate_db():
                 else:
                     results.append(f"Failed to add shop_settings.{col_name}: {str(e)}")
         
-        # 3. Data Migration: Update ICEBERG to ice Berg
+        # 3. Data Migration: Ensure 'ice Berg' casing
         try:
-            db.session.execute(text("UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = 'ICEBERG'"))
-            db.session.execute(text("UPDATE bill SET company_name = 'ice Berg' WHERE company_name = 'ICEBERG'"))
+            # Update any variation of iceberg/ice Berg to exactly 'ice Berg'
+            # (Postgres is case sensitive, so we check common variations)
+            variations = ['ICEBERG', 'Iceberg', 'iceberg', 'Ice Berg', 'Ice berg']
+            for var in variations:
+                db.session.execute(text(f"UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
+                db.session.execute(text(f"UPDATE bill SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
+            
             db.session.commit()
-            results.append("Updated 'ICEBERG' to 'ice Berg' in settings and bills")
+            results.append("Ensured 'ice Berg' branding in settings and bills")
         except Exception as e:
             db.session.rollback()
             results.append(f"Failed to update branding data: {str(e)}")
