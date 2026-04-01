@@ -34,6 +34,7 @@ class Item(db.Model):
     price = db.Column(db.Float, default=0.0)
     category = db.Column(db.String(50)) # e.g., 'Main', 'Ice Cream'
     is_flavor = db.Column(db.Boolean, default=False) # For Ice Cream flavors
+    description = db.Column(db.String(500))
 
 def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
@@ -64,3 +65,4 @@ class BillItem(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
     total_price = db.Column(db.Float, nullable=False)
+    item_description = db.Column(db.String(500))

@@ -16,7 +16,7 @@
     <table>
         <thead>
             <tr>
-                <th>Bill Number</th>
+                <th>Location</th>
                 <th>Date</th>
                 <th>Total</th>
                 <th style="text-align: right;">View</th>
@@ -25,7 +25,7 @@
         <tbody>
             {% for bill in bills %}
             <tr>
-                <td>{{ bill.bill_number }}</td>
+                <td>{{ bill.location or '-' }}</td>
                 <td>{{ bill.date.strftime('%d/%m/%Y %H:%M') }}</td>
                 <td>₹{{ "{:.2f}".format(bill.grand_total) }}</td>
                 <td style="text-align: right;">

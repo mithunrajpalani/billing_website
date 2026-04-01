@@ -318,7 +318,7 @@ def logout():
 def generate_bill():
     try:
         data = request.json
-        bill_data = data.get('items', [])
+        bill_data = request.json.get('items', [])
         grand_total = float(data.get('grand_total', 0) or 0)
         advance_amount = float(data.get('advance_amount', 0) or 0)
         discount_amount = float(data.get('discount_amount', 0) or 0)
@@ -389,12 +389,26 @@ def generate_bill():
         db.session.flush() # Get the bill id
         
         for item in bill_data:
+            # Description flow: Payload -> DB Lookup (if payload value is missing) -> Final
+            # We treat empty string as a valid "no description" if the user intentionally cleared it
+            item_desc = item.get('description')
+            print(f" * DEBUG: Item '{item.get('name')}' receives payload description: [{item_desc}]")
+            
+            if item_desc is None:
+                # Only fallback to DB if the key was completely missing
+                db_item = Item.query.filter_by(name=item['name']).first()
+                item_desc = db_item.description if db_item else None
+                print(f" * DEBUG: Falling back to DB for '{item.get('name')}': [{item_desc}]")
+            
+            print(f" * DEBUG: Final item_description for '{item.get('name')}': [{item_desc}]")
+                
             bill_item = BillItem(
                 bill_id=new_bill.id,
                 item_name=item['name'],
                 quantity=item['quantity'],
                 unit_price=item['price'],
-                total_price=item['total']
+                total_price=item['total'],
+                item_description=item_desc
             )
             db.session.add(bill_item)
         
@@ -449,7 +463,30 @@ def migrate_db():
                 else:
                     results.append(f"Failed to add shop_settings.{col_name}: {str(e)}")
         
-        # 3. Data Migration: Ensure 'ice Berg' casing
+        # 3. Add description columns to 'item' and 'bill_item' tables
+        try:
+            db.session.execute(text('ALTER TABLE item ADD COLUMN description VARCHAR(500)'))
+            db.session.commit()
+            results.append("Added description to item")
+        except Exception as e:
+            db.session.rollback()
+            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                results.append("item.description already exists")
+            else:
+                results.append(f"Failed to add item.description: {str(e)}")
+
+        try:
+            db.session.execute(text('ALTER TABLE bill_item ADD COLUMN item_description VARCHAR(500)'))
+            db.session.commit()
+            results.append("Added item_description to bill_item")
+        except Exception as e:
+            db.session.rollback()
+            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                results.append("bill_item.item_description already exists")
+            else:
+                results.append(f"Failed to add bill_item.item_description: {str(e)}")
+
+        # 4. Data Migration: Ensure 'ice Berg' casing
         try:
             # Update any variation of iceberg/ice Berg to exactly 'ice Berg'
             # (Postgres is case sensitive, so we check common variations)
@@ -637,6 +674,29 @@ def settings():
     except Exception as e:
         print(f" * Error in settings route: {e}")
         return redirect(url_for('index'))
+
+@app.route('/update_item_description', methods=['POST'])
+@login_required
+def update_item_description():
+    try:
+        data = request.json
+        item_id = data.get('item_id')
+        description = data.get('description')
+        
+        if not item_id:
+            return jsonify({'status': 'error', 'message': 'Item ID is required'}), 400
+            
+        item = Item.query.get(item_id)
+        if not item:
+            return jsonify({'status': 'error', 'message': 'Item not found'}), 404
+            
+        item.description = description
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': f'Description updated for {item.name}'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.errorhandler(500)

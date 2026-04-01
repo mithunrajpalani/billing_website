@@ -234,35 +234,61 @@
             <thead>
                 <tr>
                     <th style="font-size: 20px;">Item Name</th>
-                    <th style="font-size: 20px;">Qty</th>
-                    <th style="font-size: 20px;">Total</th>
+                    <th style="font-size: 20px; width: 80px;">Qty</th>
+                    <th style="font-size: 20px; text-align: right; width: 150px;">Total</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in bill.items %}
                 <tr>
-                    <td style="font-weight: bold;">{{ item.item_name }}</td>
+                    <td style="font-weight: bold;">
+                        {{ item.item_name }}
+                        {% if item.item_description is not none and item.item_description != "" %}
+                        <div style="font-weight: bold; margin-top: 2px;">
+                            {{ item.item_description }}
+                        </div>
+                        {% endif %}
+                    </td>
                     <td style="font-weight: bold;">{{ item.quantity }}</td>
-                    <td style="font-weight: bold;">{{ "{:.2f}".format(item.total_price) }}</td>
+                    <td style="font-weight: bold; text-align: right;">{{ "{:.2f}".format(item.total_price) }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
+            <tfoot style="font-weight: bold;">
+                <tr>
+                    <td colspan="2"
+                        style="text-align: right; font-size: 20px; border-top: 2px solid #ddd; white-space: nowrap;">
+                        Total Amount:</td>
+                    <td style="font-size: 20px; border-top: 2px solid #ddd; text-align: right;">₹ {{
+                        "{:.2f}".format(bill.grand_total) }}</td>
+                </tr>
+                {% if bill.advance_amount > 0 %}
+                <tr style="color: #c62828;">
+                    <td colspan="2" style="text-align: right; font-size: 18px; border: none; white-space: nowrap;">
+                        Advance Paid:</td>
+                    <td style="font-size: 18px; border: none; text-align: right;">₹ {{
+                        "{:.2f}".format(bill.advance_amount) }}</td>
+                </tr>
+                {% endif %}
+                {% if bill.discount_amount > 0 %}
+                <tr style="color: #636e72;">
+                    <td colspan="2" style="text-align: right; font-size: 18px; border: none; white-space: nowrap;">
+                        Discount:</td>
+                    <td style="font-size: 18px; border: none; text-align: right;">₹ {{
+                        "{:.2f}".format(bill.discount_amount) }}</td>
+                </tr>
+                {% endif %}
+                {% if bill.advance_amount > 0 or bill.discount_amount > 0 %}
+                <tr>
+                    <td colspan="2"
+                        style="text-align: right; font-size: 24px; border-top: 2px solid #333; white-space: nowrap;">
+                        Balance:</td>
+                    <td style="font-size: 24px; border-top: 2px solid #333; text-align: right;">₹ {{
+                        "{:.2f}".format(bill.balance_amount) }}</td>
+                </tr>
+                {% endif %}
+            </tfoot>
         </table>
-
-        <div class="total-section">
-            <p style="font-size: 20px;">Total Amount: {{ "{:.2f}".format(bill.grand_total) }}</p>
-            {% if bill.advance_amount > 0 %}
-            <p style="color: #c62828; font-size: 18px;">Advance Paid: {{ "{:.2f}".format(bill.advance_amount) }}</p>
-            {% endif %}
-            {% if bill.discount_amount > 0 %}
-            <p style="color: #636e72; font-size: 18px;">Discount: {{ "{:.2f}".format(bill.discount_amount) }}</p>
-            {% endif %}
-            {% if bill.advance_amount > 0 or bill.discount_amount > 0 %}
-            <p
-                style="border-top: 2px solid #333; display: inline-block; padding-top: 5px; margin-top: 5px; font-size: 24px;">
-                Balance: ₹&nbsp;&nbsp;{{ "{:.2f}".format(bill.balance_amount) }}</p>
-            {% endif %}
-        </div>
 
         {% if qr_code_base64 %}
         <div class="bill-image-section"

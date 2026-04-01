@@ -1,11 +1,17 @@
 let billItems = [];
 let currentSelectedItem = null;
 
-function selectItem(id, name, price, element) {
+function selectItem(id, name, price, element, description = null) {
+    if (!name) { return; }
+    // Set state immediately so sub-item selection knows the parent context (and description)
+    currentSelectedItem = { id, name, price, description };
+
     const containers = document.querySelectorAll('.sub-item-container');
     containers.forEach(c => c.classList.add('hidden'));
 
-    if (name === 'Ice Cream') {
+    name = (name || "").trim();
+    const upperName = name.toUpperCase();
+    if (upperName === 'ICE CREAM') {
         const container = document.getElementById('flavor-selection-container');
         container.classList.remove('hidden');
         element.parentNode.insertBefore(container, element.nextSibling);
@@ -13,7 +19,7 @@ function selectItem(id, name, price, element) {
         return;
     }
 
-    if (name === 'Fruits') {
+    if (upperName === 'FRUITS') {
         const container = document.getElementById('fruit-selection-container');
         container.classList.remove('hidden');
         element.parentNode.insertBefore(container, element.nextSibling);
@@ -21,7 +27,7 @@ function selectItem(id, name, price, element) {
         return;
     }
 
-    if (name === 'Welcome Drinks') {
+    if (upperName === 'WELCOME DRINKS') {
         const container = document.getElementById('drink-selection-container');
         container.classList.remove('hidden');
         element.parentNode.insertBefore(container, element.nextSibling);
@@ -29,7 +35,7 @@ function selectItem(id, name, price, element) {
         return;
     }
 
-    if (name === 'Beeda') {
+    if (upperName === 'BEEDA') {
         const container = document.getElementById('beeda-selection-container');
         container.classList.remove('hidden');
         element.parentNode.insertBefore(container, element.nextSibling);
@@ -37,7 +43,6 @@ function selectItem(id, name, price, element) {
         return;
     }
 
-    currentSelectedItem = { id, name, price };
     showQuantityModal(name);
 }
 
@@ -50,10 +55,13 @@ function addSubItem(selectId, parentName) {
     const name = selectedOption.value;
     const price = parseFloat(selectedOption.getAttribute('data-price'));
 
+    const oldDescription = currentSelectedItem ? currentSelectedItem.description : null;
+
     currentSelectedItem = {
         id: selectId + '-' + name,
         name: parentName + ' (' + name + ')',
-        price: price
+        price: price,
+        description: oldDescription
     };
     showQuantityModal(currentSelectedItem.name);
 
@@ -63,6 +71,13 @@ function addSubItem(selectId, parentName) {
 
 function showQuantityModal(name) {
     document.getElementById('current-item-name').innerText = name;
+
+    // Clear or set description
+    const descField = document.getElementById('item-description');
+    if (descField) {
+        descField.value = currentSelectedItem && currentSelectedItem.description ? currentSelectedItem.description : "";
+    }
+
     document.getElementById('quantity-modal').classList.remove('hidden');
     document.getElementById('item-quantity').focus();
     document.getElementById('item-quantity').select();
@@ -77,23 +92,33 @@ function confirmAddItem() {
 
     const total = currentSelectedItem.price * qty;
 
+    const desc = document.getElementById('item-description').value;
+
     // Check if item already exists in bill
-    const existingIndex = billItems.findIndex(item => item.name === currentSelectedItem.name);
+    const existingIndex = billItems.findIndex(item => item.name.trim() === currentSelectedItem.name.trim());
     if (existingIndex > -1) {
         billItems[existingIndex].quantity += qty;
         billItems[existingIndex].total = billItems[existingIndex].quantity * billItems[existingIndex].price;
+        // Also update description if one was provided in the modal
+        if (desc) {
+            billItems[existingIndex].description = desc;
+        }
     } else {
         billItems.push({
             name: currentSelectedItem.name,
-            price: currentSelectedItem.price,
+            price: parseFloat(currentSelectedItem.price) || 0,
             quantity: qty,
-            total: total
+            total: total,
+            description: desc || (currentSelectedItem.description || "")
         });
     }
 
     updateBillTable();
     document.getElementById('quantity-modal').classList.add('hidden');
-    document.getElementById('flavor-selection-container').classList.add('hidden');
+
+    // Hide all sub-item containers
+    const subContainers = document.querySelectorAll('.sub-item-container');
+    subContainers.forEach(c => c.classList.add('hidden'));
 }
 
 function updateBillTable() {
@@ -104,7 +129,10 @@ function updateBillTable() {
     billItems.forEach((item, index) => {
         const row = `
             <tr>
-                <td>${item.name}</td>
+                <td>
+                    <div style="font-weight: 600;">${item.name}</div>
+                    ${item.description ? `<div style="font-weight: 600; margin-top: 2px;">${item.description}</div>` : ''}
+                </td>
                 <td>${item.quantity}</td>
                 <td>₹${item.price.toFixed(2)}</td>
                 <td>₹${item.total.toFixed(2)}</td>
@@ -150,23 +178,25 @@ async function generateBill() {
     const date = document.getElementById('bill-date').value;
     const time = document.getElementById('bill-time').value;
 
+    const payload = {
+        items: billItems,
+        grand_total: grandTotal,
+        advance_amount: advance,
+        discount_amount: discount,
+        balance_amount: balance,
+        party_number: document.getElementById('bill-party-number').value,
+        location: location,
+        date: date,
+        time: time
+    };
+
     try {
         const response = await fetch('/generate_bill', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                items: billItems,
-                grand_total: grandTotal,
-                advance_amount: advance,
-                discount_amount: discount,
-                balance_amount: balance,
-                party_number: document.getElementById('bill-party-number').value,
-                location: location,
-                date: date,
-                time: time
-            }),
+            body: JSON.stringify(payload),
         });
 
         if (!response.ok) {

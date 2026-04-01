@@ -25,7 +25,7 @@
         <div class="item-selection">
             {% for item in items %}
             <div class="item-card"
-                onclick="selectItem('{{ item.id }}', '{{ item.name }}', {{ item.price | default(0) }}, this)">
+                onclick='selectItem({{ item.id | tojson }}, {{ item.name | tojson }}, {{ item.price | default(0) }}, this, {{ (item.description or "") | tojson }})'>
                 <span class="item-name">{{ item.name }}</span>
                 <span class="item-price">₹{{ item.price }}</span>
             </div>
@@ -91,8 +91,40 @@
                 <div style="flex: 1;">
                     <label>Quantity</label>
                     <input type="number" id="item-quantity" value="1" min="1">
+                    <div style="flex: 1;">
+                        <label>Description</label>
+                        <textarea id="item-description" rows="1" placeholder="Add note..."
+                            style="width: 100%; border: 1px solid #ccc; border-radius: 4px; padding: 8px; font-family: inherit; font-size: 0.9rem;"></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="confirmAddItem()">Add to Bill</button>
                 </div>
-                <button class="btn btn-primary" onclick="confirmAddItem()">Add to Bill</button>
+            </div>
+
+            <div class="item-description-section"
+                style="margin-top: 35px; padding-top: 25px; border-top: 1px dashed #ddd;">
+                <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--accent-color);">Manage Item Descriptions
+                </h3>
+                <div class="form-group">
+                    <label for="dash_item_id_for_desc" style="font-size: 0.85rem; font-weight: 600;">Select Main
+                        Item</label>
+                    <select id="dash_item_id_for_desc" onchange="loadDashDescription()">
+                        <option value="">-- Select Item --</option>
+                        {% for item in items | sort(attribute='name') %}
+                        <option value="{{ item.id }}" data-description="{{ (item.description or '') | forceescape }}"
+                            data-price="{{ item.price }}">{{ item.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="dash_item_description" style="font-size: 0.85rem; font-weight: 600;">Description</label>
+                    <textarea id="dash_item_description" rows="2" placeholder="Description for bill..."
+                        style="font-size: 0.9rem;"></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="addItemWithDescription()"
+                    style="width: 100%; font-size: 0.9rem; padding: 8px;">Add to Bill</button>
+                <div id="desc-save-status"
+                    style="font-size: 0.8rem; margin-top: 8px; text-align: center; height: 1.2em;">
+                </div>
             </div>
         </div>
     </div>
@@ -104,7 +136,8 @@
             <p style="font-weight: 700;">{{ settings.company_name }}</p>
             <p>{{ settings.shop_name }}</p>
             <p style="font-size: 0.8rem;">{{ settings.address }}</p>
-            <p style="font-size: 0.8rem;">Mobile: {{ settings.mobile }}{{ ', ' + settings.mobile2 if settings.mobile2
+            <p style="font-size: 0.8rem;">Mobile: {{ settings.mobile }}{{ ', ' + settings.mobile2 if
+                settings.mobile2
                 else '' }}</p>
         </div>
 
@@ -160,15 +193,18 @@
         </table>
 
         <div style="margin-top: 30px; display: flex; gap: 10px;">
-            <button class="btn btn-primary" style="flex: 1;" onclick="generateBill()">Generate Bill / Submit</button>
+            <button class="btn btn-primary" style="flex: 1;" onclick="generateBill()">Generate Bill /
+                Submit</button>
             <button class="btn" style="background: #ccc;" onclick="clearBill()">Clear</button>
         </div>
 
         <div id="bill-success" class="hidden" style="margin-top: 20px;">
             <div class="alert">Bill generated successfully!</div>
-            <a id="view-bill-link" href="#" target="_blank" class="btn btn-primary" style="width: 100%;">View Bill</a>
+            <a id="view-bill-link" href="#" target="_blank" class="btn btn-primary" style="width: 100%;">View
+                Bill</a>
         </div>
     </div>
+</div>
 </div>
 
 <script>
@@ -178,5 +214,51 @@
         address: "{{ settings.address }}",
         mobile: "{{ settings.mobile }}"
     };
+
+    function loadDashDescription() {
+        const select = document.getElementById('dash_item_id_for_desc');
+        const textarea = document.getElementById('dash_item_description');
+        const status = document.getElementById('desc-save-status');
+        const selectedOption = select.options[select.selectedIndex];
+
+        status.textContent = '';
+        if (selectedOption && selectedOption.value) {
+            textarea.value = selectedOption.getAttribute('data-description') || '';
+        } else {
+            textarea.value = '';
+        }
+    }
+
+    function addItemWithDescription() {
+        const select = document.getElementById('dash_item_id_for_desc');
+        const textarea = document.getElementById('dash_item_description');
+        const status = document.getElementById('desc-save-status');
+
+        const itemId = select.value;
+        const description = textarea.value;
+        const selectedOption = select.options[select.selectedIndex];
+
+        if (!itemId) {
+            status.style.color = 'var(--danger-color)';
+            status.textContent = 'Please select an item first';
+            return;
+        }
+
+        const itemName = selectedOption.text.trim();
+        const price = parseFloat(selectedOption.getAttribute('data-price')) || 0;
+
+        console.log("addItemWithDescription called:", { itemId, itemName, price, description });
+
+        // Directly trigger the selection flow without saving to DB
+        const firstCard = document.querySelector('.item-card');
+        console.log("Found firstCard:", !!firstCard);
+
+        selectItem(itemId, itemName, price, firstCard || select, description);
+
+        status.style.color = 'var(--success-color)';
+        status.textContent = '✓ Processing...';
+        // Don't clear textarea yet, wait for quantity confirmation
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    }
 </script>
 {% endblock %}

@@ -151,9 +151,20 @@ h2 {
 
 /* Grid Layout */
 .billing-grid {
-    display: grid;
-    grid-template-columns: 1.2fr 0.8fr;
+    display: flex;
     gap: 35px;
+    align-items: flex-start;
+}
+
+.billing-grid>.card:first-child {
+    flex: 1;
+    min-width: 0;
+    /* Prevent flex parent overflow */
+}
+
+.billing-grid>.card:last-child {
+    width: 450px;
+    flex-shrink: 0;
 }
 
 .dashboard-header-grid {
@@ -344,10 +355,14 @@ td {
 }
 
 /* Mobile Responsiveness */
-@media (max-width: 992px) {
+@media (max-width: 1100px) {
     .billing-grid {
-        grid-template-columns: 1fr;
+        flex-direction: column;
         gap: 25px;
+    }
+
+    .billing-grid>.card:last-child {
+        width: 100%;
     }
 }
 
