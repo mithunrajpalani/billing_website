@@ -429,15 +429,15 @@ def generate_bill():
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': f'Server error: {str(e)}'}), 500
 
-@app.route('/migrate_db')
-def migrate_db():
+def run_migrations():
     from sqlalchemy import text
     try:
         # 1. Add columns to 'bill' table
         bill_columns = [
             ('party_number', 'VARCHAR(50)'),
             ('qr_code_path', 'VARCHAR(255)'),
-            ('pdf_path', 'VARCHAR(255)')
+            ('pdf_path', 'VARCHAR(255)'),
+            ('location', 'VARCHAR(150)')
         ]
         
         results = []
@@ -494,22 +494,25 @@ def migrate_db():
 
         # 4. Data Migration: Ensure 'ice Berg' casing
         try:
-            # Update any variation of iceberg/ice Berg to exactly 'ice Berg'
-            # (Postgres is case sensitive, so we check common variations)
             variations = ['ICEBERG', 'Iceberg', 'iceberg', 'Ice Berg', 'Ice berg']
             for var in variations:
                 db.session.execute(text(f"UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
                 db.session.execute(text(f"UPDATE bill SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
-            
             db.session.commit()
-            results.append("Ensured 'ice Berg' branding in settings and bills")
+            results.append("Ensured 'ice Berg' branding")
         except Exception as e:
             db.session.rollback()
-            results.append(f"Failed to update branding data: {str(e)}")
+            results.append(f"Branding update skipped: {str(e)}")
         
-        return f"Migration results: <br> - " + "<br> - ".join(results)
+        return results
     except Exception as e:
-        return f"Migration failed check: {str(e)}"
+        print(f" * Migration error: {e}")
+        return [str(e)]
+
+@app.route('/migrate_db')
+def migrate_db_route():
+    results = run_migrations()
+    return f"Migration results: <br> - " + "<br> - ".join(results)
 
 @app.route('/view_bill/<bill_number>')
 @login_required
@@ -733,6 +736,7 @@ def safe_init():
         _initialized = True
         try:
             seed_data()
+            run_migrations()
         except Exception as e:
             print(f"Lazy initialization error: {e}")
             # If it failed, maybe we should try again later? 

@@ -249,7 +249,11 @@
                         </div>
                         {% endif %}
                     </td>
-                    <td style="font-weight: bold;">{{ item.quantity }}</td>
+                    <td style="font-weight: bold;">
+                        {% if item.item_name.lower() not in ['auto', 'boy'] %}
+                        {{ item.quantity }}
+                        {% endif %}
+                    </td>
                     <td style="font-weight: bold; text-align: right;">{{ "{:.2f}".format(item.total_price) }}</td>
                 </tr>
                 {% endfor %}
@@ -264,9 +268,9 @@
                 </tr>
                 {% if bill.advance_amount > 0 %}
                 <tr style="color: #c62828;">
-                    <td colspan="2" style="text-align: right; font-size: 18px; border: none; white-space: nowrap;">
+                    <td colspan="2" style="text-align: right; font-size: 24px; border: none; white-space: nowrap;">
                         Advance Paid:</td>
-                    <td style="font-size: 18px; border: none; text-align: right;">₹ {{
+                    <td style="font-size: 24px; border: none; text-align: right;">₹ {{
                         "{:.2f}".format(bill.advance_amount) }}</td>
                 </tr>
                 {% endif %}
