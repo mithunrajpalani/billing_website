@@ -24,9 +24,7 @@ def get_now():
     return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=5, minutes=30)
 
 if IS_VERCEL:
-    # On Vercel, the only writable directory is /tmp
     app = Flask(__name__, instance_path='/tmp')
-    # Try common Vercel/Supabase environment variables
     db_uri = os.environ.get('DATABASE_URL') or \
              os.environ.get('POSTGRES_URL') or \
              os.environ.get('POSTGRES_URL_NON_POOLING') or \
@@ -53,6 +51,10 @@ else:
     # Ensure folders exist
     os.makedirs(os.path.join(basedir, 'instance'), exist_ok=True)
     os.makedirs(upload_folder, exist_ok=True)
+
+# Important for Vercel/Serverless
+application = app
+handler = app
 
 # Supabase Configuration
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -100,10 +102,11 @@ login_manager.login_view = 'login'
 
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):
-    if supabase and (filename.startswith("qr_codes/") or "/" in filename):
+    client = get_supabase()
+    if client and (filename.startswith("qr_codes/") or "/" in filename):
         try:
             # Proxy from Supabase
-            file_data = supabase.storage.from_(SUPABASE_BUCKET).download(filename)
+            file_data = client.storage.from_(SUPABASE_BUCKET).download(filename)
             if file_data:
                 mime_type, _ = mimetypes.guess_type(filename)
                 response = make_response(file_data)
