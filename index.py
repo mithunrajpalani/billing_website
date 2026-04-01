@@ -432,77 +432,73 @@ def generate_bill():
 def run_migrations():
     from sqlalchemy import text
     try:
-        # 1. Add columns to 'bill' table
-        bill_columns = [
-            ('party_number', 'VARCHAR(50)'),
-            ('qr_code_path', 'VARCHAR(255)'),
-            ('pdf_path', 'VARCHAR(255)'),
-            ('location', 'VARCHAR(150)')
-        ]
-        
         results = []
-        for col_name, col_type in bill_columns:
+        with db.engine.connect() as conn:
+            # 1. Add columns to 'bill' table
+            bill_columns = [
+                ('party_number', 'VARCHAR(50)'),
+                ('qr_code_path', 'VARCHAR(255)'),
+                ('pdf_path', 'VARCHAR(255)'),
+                ('location', 'VARCHAR(150)')
+            ]
+            
+            for col_name, col_type in bill_columns:
+                try:
+                    conn.execute(text(f'ALTER TABLE bill ADD COLUMN {col_name} {col_type}'))
+                    conn.commit()
+                    results.append(f"Added {col_name} to bill")
+                except Exception as e:
+                    if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                        results.append(f"bill.{col_name} already exists")
+                    else:
+                        results.append(f"Failed to add bill.{col_name}: {str(e)}")
+
+            # 2. Add columns to 'shop_settings' table
+            settings_columns = [
+                ('qr_code_path', 'VARCHAR(255)')
+            ]
+            for col_name, col_type in settings_columns:
+                try:
+                    conn.execute(text(f'ALTER TABLE shop_settings ADD COLUMN {col_name} {col_type}'))
+                    conn.commit()
+                    results.append(f"Added {col_name} to shop_settings")
+                except Exception as e:
+                    if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                        results.append(f"shop_settings.{col_name} already exists")
+                    else:
+                        results.append(f"Failed to add shop_settings.{col_name}: {str(e)}")
+            
+            # 3. Add description columns to 'item' and 'bill_item' tables
             try:
-                db.session.execute(text(f'ALTER TABLE bill ADD COLUMN {col_name} {col_type}'))
-                db.session.commit()
-                results.append(f"Added {col_name} to bill")
+                conn.execute(text('ALTER TABLE item ADD COLUMN description VARCHAR(500)'))
+                conn.commit()
+                results.append("Added description to item")
             except Exception as e:
-                db.session.rollback()
                 if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                    results.append(f"bill.{col_name} already exists")
+                    results.append("item.description already exists")
                 else:
-                    results.append(f"Failed to add bill.{col_name}: {str(e)}")
+                    results.append(f"Failed to add item.description: {str(e)}")
 
-        # 2. Add columns to 'shop_settings' table
-        settings_columns = [
-            ('qr_code_path', 'VARCHAR(255)')
-        ]
-        for col_name, col_type in settings_columns:
             try:
-                db.session.execute(text(f'ALTER TABLE shop_settings ADD COLUMN {col_name} {col_type}'))
-                db.session.commit()
-                results.append(f"Added {col_name} to shop_settings")
+                conn.execute(text('ALTER TABLE bill_item ADD COLUMN item_description VARCHAR(500)'))
+                conn.commit()
+                results.append("Added item_description to bill_item")
             except Exception as e:
-                db.session.rollback()
                 if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                    results.append(f"shop_settings.{col_name} already exists")
+                    results.append("bill_item.item_description already exists")
                 else:
-                    results.append(f"Failed to add shop_settings.{col_name}: {str(e)}")
-        
-        # 3. Add description columns to 'item' and 'bill_item' tables
-        try:
-            db.session.execute(text('ALTER TABLE item ADD COLUMN description VARCHAR(500)'))
-            db.session.commit()
-            results.append("Added description to item")
-        except Exception as e:
-            db.session.rollback()
-            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                results.append("item.description already exists")
-            else:
-                results.append(f"Failed to add item.description: {str(e)}")
+                    results.append(f"Failed to add bill_item.item_description: {str(e)}")
 
-        try:
-            db.session.execute(text('ALTER TABLE bill_item ADD COLUMN item_description VARCHAR(500)'))
-            db.session.commit()
-            results.append("Added item_description to bill_item")
-        except Exception as e:
-            db.session.rollback()
-            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                results.append("bill_item.item_description already exists")
-            else:
-                results.append(f"Failed to add bill_item.item_description: {str(e)}")
-
-        # 4. Data Migration: Ensure 'ice Berg' casing
-        try:
-            variations = ['ICEBERG', 'Iceberg', 'iceberg', 'Ice Berg', 'Ice berg']
-            for var in variations:
-                db.session.execute(text(f"UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
-                db.session.execute(text(f"UPDATE bill SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
-            db.session.commit()
-            results.append("Ensured 'ice Berg' branding")
-        except Exception as e:
-            db.session.rollback()
-            results.append(f"Branding update skipped: {str(e)}")
+            # 4. Data Migration: Ensure 'ice Berg' casing
+            try:
+                variations = ['ICEBERG', 'Iceberg', 'iceberg', 'Ice Berg', 'Ice berg']
+                for var in variations:
+                    conn.execute(text(f"UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
+                    conn.execute(text(f"UPDATE bill SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
+                conn.commit()
+                results.append("Ensured 'ice Berg' branding")
+            except Exception as e:
+                results.append(f"Branding update skipped: {str(e)}")
         
         return results
     except Exception as e:
@@ -732,11 +728,10 @@ _initialized = False
 def safe_init():
     global _initialized
     if not _initialized:
-        # Set to True immediately to prevent multiple concurrent requests from re-triggering
-        _initialized = True
         try:
             seed_data()
             run_migrations()
+            _initialized = True
         except Exception as e:
             print(f"Lazy initialization error: {e}")
             # If it failed, maybe we should try again later? 
