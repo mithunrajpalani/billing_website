@@ -176,7 +176,8 @@ def load_user(user_id):
 # Create database and seed initial data
 def seed_data():
     with app.app_context():
-        # Move create_all to the main block to avoid overhead in requests
+        # Ensure tables exist
+        db.create_all()
         # Create default user if not exists
         admin = User.query.filter_by(username='admin').first()
         if not admin:
@@ -260,8 +261,10 @@ def index():
                               beeda_items=beeda_items,
                               date=get_now())
     except Exception as e:
-        print(f" * Error in index route: {e}")
-        return "Database is still initializing or connection failed. Please refresh in a few seconds.", 503
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f" * Error in index route: {error_msg}")
+        return f"Database error or still initializing. <br><br>Error details: {str(e)} <br><br>If this is the first run, please refresh after 5 seconds.", 503
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
