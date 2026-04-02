@@ -431,84 +431,74 @@ def generate_bill():
 
 def run_migrations():
     from sqlalchemy import text
+    results = []
+    
+    def try_alter(table, column, col_type):
+        try:
+            # Use AUTOCOMMIT to prevent transaction poisoning on Postgres
+            with db.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
+            return f"Successfully added {table}.{column}"
+        except Exception as e:
+            err_str = str(e).lower()
+            if "already exists" in err_str or "duplicate column" in err_str:
+                return f"{table}.{column} already exists"
+            return f"FAILED to add {table}.{column}: {str(e)}"
+
+    # 1. Bill table columns
+    bill_cols = [
+        ('party_number', 'VARCHAR(50)'),
+        ('qr_code_path', 'VARCHAR(255)'),
+        ('pdf_path', 'VARCHAR(255)'),
+        ('location', 'VARCHAR(150)')
+    ]
+    for col, ctype in bill_cols:
+        results.append(try_alter('bill', col, ctype))
+
+    # 2. Shop settings columns
+    results.append(try_alter('shop_settings', 'qr_code_path', 'VARCHAR(255)'))
+
+    # 3. Item and BillItem description columns
+    results.append(try_alter('item', 'description', 'VARCHAR(500)'))
+    results.append(try_alter('bill_item', 'item_description', 'VARCHAR(500)'))
+
+    # 4. Data Migration (Separate transaction)
     try:
-        results = []
         with db.engine.connect() as conn:
-            # 1. Add columns to 'bill' table
-            bill_columns = [
-                ('party_number', 'VARCHAR(50)'),
-                ('qr_code_path', 'VARCHAR(255)'),
-                ('pdf_path', 'VARCHAR(255)'),
-                ('location', 'VARCHAR(150)')
-            ]
-            
-            for col_name, col_type in bill_columns:
-                try:
-                    conn.execute(text(f'ALTER TABLE bill ADD COLUMN {col_name} {col_type}'))
-                    conn.commit()
-                    results.append(f"Added {col_name} to bill")
-                except Exception as e:
-                    if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                        results.append(f"bill.{col_name} already exists")
-                    else:
-                        results.append(f"Failed to add bill.{col_name}: {str(e)}")
-
-            # 2. Add columns to 'shop_settings' table
-            settings_columns = [
-                ('qr_code_path', 'VARCHAR(255)')
-            ]
-            for col_name, col_type in settings_columns:
-                try:
-                    conn.execute(text(f'ALTER TABLE shop_settings ADD COLUMN {col_name} {col_type}'))
-                    conn.commit()
-                    results.append(f"Added {col_name} to shop_settings")
-                except Exception as e:
-                    if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                        results.append(f"shop_settings.{col_name} already exists")
-                    else:
-                        results.append(f"Failed to add shop_settings.{col_name}: {str(e)}")
-            
-            # 3. Add description columns to 'item' and 'bill_item' tables
-            try:
-                conn.execute(text('ALTER TABLE item ADD COLUMN description VARCHAR(500)'))
-                conn.commit()
-                results.append("Added description to item")
-            except Exception as e:
-                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                    results.append("item.description already exists")
-                else:
-                    results.append(f"Failed to add item.description: {str(e)}")
-
-            try:
-                conn.execute(text('ALTER TABLE bill_item ADD COLUMN item_description VARCHAR(500)'))
-                conn.commit()
-                results.append("Added item_description to bill_item")
-            except Exception as e:
-                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
-                    results.append("bill_item.item_description already exists")
-                else:
-                    results.append(f"Failed to add bill_item.item_description: {str(e)}")
-
-            # 4. Data Migration: Ensure 'ice Berg' casing
-            try:
-                variations = ['ICEBERG', 'Iceberg', 'iceberg', 'Ice Berg', 'Ice berg']
-                for var in variations:
-                    conn.execute(text(f"UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
-                    conn.execute(text(f"UPDATE bill SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
-                conn.commit()
-                results.append("Ensured 'ice Berg' branding")
-            except Exception as e:
-                results.append(f"Branding update skipped: {str(e)}")
-        
-        return results
+            variations = ['ICEBERG', 'Iceberg', 'iceberg', 'Ice Berg', 'Ice berg']
+            for var in variations:
+                conn.execute(text(f"UPDATE shop_settings SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
+                conn.execute(text(f"UPDATE bill SET company_name = 'ice Berg' WHERE company_name = '{var}'"))
+            conn.commit()
+            results.append("Ensured 'ice Berg' branding")
     except Exception as e:
-        print(f" * Migration error: {e}")
-        return [str(e)]
+        results.append(f"Branding update skipped: {str(e)}")
+
+    return results
+
+@app.route('/check_db')
+def check_db():
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    tables = inspector.get_table_names()
+    details = {}
+    for table in tables:
+        columns = [c['name'] for c in inspector.get_columns(table)]
+        details[table] = columns
+    return jsonify({
+        'tables': tables,
+        'details': details,
+        'db_type': 'Postgres' if 'postgres' in str(db.engine.url).lower() else 'SQLite'
+    })
 
 @app.route('/migrate_db')
 def migrate_db_route():
     results = run_migrations()
-    return f"Migration results: <br> - " + "<br> - ".join(results)
+    return f"Migration results (v3): <br> - " + "<br> - ".join(results)
+
+@app.route('/version')
+def version():
+    return "v3 - Autocommit Migrations"
 
 @app.route('/view_bill/<bill_number>')
 @login_required
@@ -730,10 +720,13 @@ def safe_init():
     if not _initialized:
         try:
             seed_data()
-            run_migrations()
             _initialized = True
         except Exception as e:
             print(f"Lazy initialization error: {e}")
+    
+    # Run migrations even if already initialized, to catch up missing columns
+    # (try_alter handles 'already exists' gracefully)
+    run_migrations()
             # If it failed, maybe we should try again later? 
             # For now, let's just log it.
 
