@@ -720,15 +720,15 @@ def safe_init():
     if not _initialized:
         try:
             seed_data()
+            # Run migrations even if already initialized, to catch up missing columns
+            # (try_alter handles 'already exists' gracefully)
+            run_migrations()
             _initialized = True
         except Exception as e:
             print(f"Lazy initialization error: {e}")
     
-    # Run migrations even if already initialized, to catch up missing columns
-    # (try_alter handles 'already exists' gracefully)
-    run_migrations()
-            # If it failed, maybe we should try again later? 
-            # For now, let's just log it.
+    # If it failed, maybe we should try again later? 
+    # For now, let's just log it.
 
 if __name__ == '__main__':
     with app.app_context():
