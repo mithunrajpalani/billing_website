@@ -284,7 +284,7 @@ def login():
         print(f" * Error in login route: {e}")
         # If DB isn't ready, at least show the page
         if request.method == 'POST':
-            flash('Database connection error. Please try again in 1 minute.')
+            flash(f'Database connection error: {str(e)}')
         return render_template('login.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
